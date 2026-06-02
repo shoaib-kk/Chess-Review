@@ -80,12 +80,12 @@ footer { visibility: hidden; }
 
 
 # ── Imports (after page config) ───────────────────────────────────────────────
-from services.game_analyzer import analyze_pgn
-from analysis.stockfish_engine import find_stockfish
-from components.board_panel import render_board_panel
-from components.move_list import render_move_list
-from components.eval_graph import render_eval_graph
-from components.analysis_panel import render_analysis_panel
+from game_analyzer import analyze_pgn
+from stockfish_engine import find_stockfish
+from board_panel import render_board_panel
+from move_list import render_move_list
+from eval_graph import render_eval_graph
+from analysis_panel import render_analysis_panel
 
 
 # ── Session state initialisation ──────────────────────────────────────────────

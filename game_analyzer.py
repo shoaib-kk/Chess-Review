@@ -6,9 +6,9 @@ Orchestrates PGN parsing → engine evaluation → GameSummary.
 import chess
 from typing import Optional, Callable
 
-from analysis.models import MoveAnalysis, GameSummary, classify_move
-from analysis.pgn_parser import load_game_from_pgn_string, extract_headers, iter_positions
-from analysis.stockfish_engine import StockfishEngine
+from models import MoveAnalysis, GameSummary, classify_move
+from pgn_parser import load_game_from_pgn_string, extract_headers, iter_positions
+from stockfish_engine import StockfishEngine
 
 
 def _cp_loss(eval_before: Optional[float], eval_after: Optional[float]) -> Optional[float]:

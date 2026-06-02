@@ -4,7 +4,7 @@ Center panel: scrollable move list with classification badges.
 """
 
 import streamlit as st
-from analysis.models import GameSummary, MoveClassification, CLASSIFICATION_COLORS, CLASSIFICATION_EMOJIS
+from models import GameSummary, MoveClassification, CLASSIFICATION_COLORS, CLASSIFICATION_EMOJIS
 
 
 # Background tints for each move row

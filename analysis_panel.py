@@ -4,7 +4,7 @@ Right panel: per-move analysis details + summary stats.
 """
 
 import streamlit as st
-from analysis.models import GameSummary, MoveClassification, CLASSIFICATION_COLORS, CLASSIFICATION_EMOJIS
+from models import GameSummary, MoveClassification, CLASSIFICATION_COLORS, CLASSIFICATION_EMOJIS
 
 
 def _fmt_eval(cp):

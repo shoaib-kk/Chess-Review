@@ -4,8 +4,8 @@ Left panel: interactive chess board.
 """
 
 import streamlit as st
-from services.board_renderer import render_board_svg, fen_to_last_move_uci, san_to_uci
-from analysis.models import GameSummary, MoveClassification, CLASSIFICATION_COLORS
+from board_renderer import render_board_svg, fen_to_last_move_uci, san_to_uci
+from models import GameSummary, MoveClassification, CLASSIFICATION_COLORS
 
 
 def render_board_panel(summary: GameSummary, move_index: int) -> None:

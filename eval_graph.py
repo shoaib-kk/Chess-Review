@@ -5,7 +5,7 @@ Evaluation graph rendered with Plotly.
 
 import streamlit as st
 import plotly.graph_objects as go
-from analysis.models import GameSummary, MoveClassification, CLASSIFICATION_COLORS
+from models import GameSummary, MoveClassification, CLASSIFICATION_COLORS
 
 
 def _clamp(val, lo=-10, hi=10):
