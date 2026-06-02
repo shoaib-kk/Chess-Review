@@ -1,17 +1,20 @@
 import { useEffect, useState } from "react";
-import { analyzeChessComGame, analyzeGame, apiErrorMessage, fetchChessComGames, getHealth } from "./api/client";
-import { AccuracyCards } from "./components/AccuracyCards";
+import { analyzeChessComGame, analyzeGame, apiErrorMessage, fetchChessComGames, fetchPlayerInsights, getHealth } from "./api/client";
 import { AnalysisPanel } from "./components/AnalysisPanel";
-import { ChessBoardPanel } from "./components/ChessBoardPanel";
+import { AppShell } from "./components/AppShell";
+import { ChessboardPanel } from "./components/ChessBoardPanel";
 import { ChessComImport } from "./components/ChessComImport";
-import { EvalGraph } from "./components/EvalGraph";
+import { EvalGraphPanel } from "./components/EvalGraph";
 import { Header } from "./components/Header";
-import { MoveList } from "./components/MoveList";
+import { MoveListPanel } from "./components/MoveList";
+import { PlayerInsightsPage } from "./components/PlayerInsightsPage";
 import { PgnInput } from "./components/PgnInput";
-import type { ChessComGame, GameSummary } from "./types";
+import { SummaryStrip } from "./components/SummaryStrip";
+import type { AnalysisMode, ChessComGame, GameSummary, PlayerInsights } from "./types";
 
 export default function App() {
   const [apiStatus, setApiStatus] = useState<"checking" | "ok" | "down">("checking");
+  const [activeMode, setActiveMode] = useState<"chesscom" | "pgn" | "insights">("chesscom");
   const [summary, setSummary] = useState<GameSummary | null>(null);
   const [moveIndex, setMoveIndex] = useState(-1);
   const [flipped, setFlipped] = useState(false);
@@ -25,14 +28,15 @@ export default function App() {
       .catch(() => setApiStatus("down"));
   }, []);
 
-  async function handleAnalyze(pgn: string, depth: number) {
+  async function handleAnalyze(pgn: string, depth: number, mode: AnalysisMode) {
     setLoading(true);
     setError(null);
     try {
-      const result = await analyzeGame({ pgn, depth });
+      const result = await analyzeGame({ pgn, depth, mode });
       setSummary(result);
       setMoveIndex(-1);
       setReviewMyMovesOnly(false);
+      setFlipped(false);
       setApiStatus("ok");
     } catch (err) {
       setError(apiErrorMessage(err));
@@ -53,11 +57,11 @@ export default function App() {
     }
   }
 
-  async function handleAnalyzeChessComGame(username: string, pgn: string) {
+  async function handleAnalyzeChessComGame(username: string, pgn: string, mode: AnalysisMode) {
     setLoading(true);
     setError(null);
     try {
-      const result = await analyzeChessComGame({ username, pgn, depth: 16 });
+      const result = await analyzeChessComGame({ username, pgn, depth: 16, mode });
       setSummary(result);
       setMoveIndex(-1);
       setFlipped(result.user_color === "Black");
@@ -70,81 +74,121 @@ export default function App() {
     }
   }
 
+  async function handleFetchPlayerInsights(
+    username: string,
+    params: { limit: number; time_class: "rapid" | "blitz" | "bullet" | ""; rated_only: boolean },
+  ): Promise<PlayerInsights | null> {
+    setLoading(true);
+    setError(null);
+    try {
+      const result = await fetchPlayerInsights(username, params);
+      setApiStatus("ok");
+      return result;
+    } catch (err) {
+      setError(apiErrorMessage(err));
+      return null;
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function startNewReview() {
+    setSummary(null);
+    setMoveIndex(-1);
+    setReviewMyMovesOnly(false);
+    setError(null);
+  }
+
   return (
-    <div className="min-h-screen bg-app-bg">
-      <Header apiStatus={apiStatus} />
+    <AppShell>
+      <Header
+        apiStatus={apiStatus}
+        activeMode={activeMode}
+        onModeChange={setActiveMode}
+        onNewReview={summary ? startNewReview : undefined}
+      />
 
-      {error && (
-        <div className="mx-auto mt-4 max-w-5xl rounded border border-red-400/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">
-          {error}
-        </div>
-      )}
-
-      {!summary ? (
-        <main className="mx-auto grid w-full max-w-6xl gap-5 px-4 py-8 lg:grid-cols-[0.9fr_1.1fr] lg:px-8">
-          <ChessComImport
-            loading={loading}
-            onFetchGames={handleFetchChessComGames}
-            onAnalyzeGame={handleAnalyzeChessComGame}
-          />
-          <PgnInput loading={loading} onAnalyze={handleAnalyze} />
-        </main>
-      ) : (
-        <main className="grid gap-4 px-4 py-5 lg:grid-cols-[minmax(340px,520px)_1fr] lg:px-8">
-          <div className="lg:col-span-2">
-            <AccuracyCards summary={summary} />
+      <main className="mx-auto w-full max-w-7xl px-4 py-6 lg:px-6">
+        {error && (
+          <div className="mb-5 rounded-lg bg-app-blunder/10 px-4 py-3 text-sm text-red-200 ring-1 ring-app-blunder/25">
+            {error}
           </div>
+        )}
 
-          {summary.user_username && (
-            <div className="lg:col-span-2 flex flex-col gap-3 rounded bg-app-panel p-4 shadow-panel sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Player Perspective</p>
-                <p className="text-sm text-slate-300">
-                  Reviewing {summary.user_username} as {summary.user_color} vs {summary.opponent_username ?? "opponent"}
-                </p>
-              </div>
-              <label className="flex items-center gap-3 text-sm font-semibold text-slate-200">
-                <input
-                  type="checkbox"
-                  className="h-4 w-4 accent-app-accent"
-                  checked={reviewMyMovesOnly}
-                  onChange={(event) => setReviewMyMovesOnly(event.target.checked)}
+        {!summary ? (
+          <div className="mx-auto max-w-3xl">
+            {activeMode === "chesscom" ? (
+              <ChessComImport
+                loading={loading}
+                onFetchGames={handleFetchChessComGames}
+                onAnalyzeGame={handleAnalyzeChessComGame}
+              />
+            ) : activeMode === "pgn" ? (
+              <PgnInput loading={loading} onAnalyze={handleAnalyze} />
+            ) : (
+              <PlayerInsightsPage loading={loading} onFetchInsights={handleFetchPlayerInsights} />
+            )}
+          </div>
+        ) : (
+          <div className="grid gap-5">
+            {activeMode === "insights" ? (
+              <PlayerInsightsPage
+                loading={loading}
+                onFetchInsights={handleFetchPlayerInsights}
+                initialUsername={summary.user_username}
+              />
+            ) : (
+            <>
+            <SummaryStrip summary={summary} />
+
+            {summary.user_username && (
+              <section className="flex flex-col gap-3 rounded-lg bg-app-panel px-5 py-4 shadow-panel ring-1 ring-app-border/70 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-app-muted">Player perspective</p>
+                  <p className="mt-1 text-sm text-slate-300">
+                    Reviewing {summary.user_username} as {summary.user_color} vs {summary.opponent_username ?? "opponent"}
+                  </p>
+                </div>
+                <label className="flex items-center gap-3 text-sm font-semibold text-app-text">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 accent-app-accent"
+                    checked={reviewMyMovesOnly}
+                    onChange={(event) => setReviewMyMovesOnly(event.target.checked)}
+                  />
+                  Review my moves only
+                </label>
+              </section>
+            )}
+
+            <div className="grid gap-5 lg:grid-cols-[minmax(360px,45%)_minmax(0,55%)]">
+              <div className="min-w-0">
+                <ChessboardPanel
+                  summary={summary}
+                  moveIndex={moveIndex}
+                  flipped={flipped}
+                  reviewMyMovesOnly={reviewMyMovesOnly}
+                  onFlip={() => setFlipped((value) => !value)}
+                  onMoveIndexChange={setMoveIndex}
                 />
-                Review my moves only
-              </label>
+              </div>
+
+              <div className="grid min-w-0 gap-5">
+                <EvalGraphPanel summary={summary} currentIndex={moveIndex} onSelectMove={setMoveIndex} />
+                <MoveListPanel
+                  summary={summary}
+                  currentIndex={moveIndex}
+                  onSelectMove={setMoveIndex}
+                  reviewMyMovesOnly={reviewMyMovesOnly}
+                />
+                <AnalysisPanel summary={summary} currentIndex={moveIndex} />
+              </div>
             </div>
-          )}
-
-          <ChessBoardPanel
-            summary={summary}
-            moveIndex={moveIndex}
-            flipped={flipped}
-            reviewMyMovesOnly={reviewMyMovesOnly}
-            onFlip={() => setFlipped((value) => !value)}
-            onMoveIndexChange={setMoveIndex}
-          />
-
-          <div className="grid gap-4">
-            <EvalGraph summary={summary} currentIndex={moveIndex} onSelectMove={setMoveIndex} />
-            <MoveList
-              summary={summary}
-              currentIndex={moveIndex}
-              onSelectMove={setMoveIndex}
-              reviewMyMovesOnly={reviewMyMovesOnly}
-            />
+            </>
+            )}
           </div>
-
-          <div className="lg:col-span-2">
-            <AnalysisPanel summary={summary} currentIndex={moveIndex} />
-          </div>
-
-          <div className="lg:col-span-2 flex justify-between gap-3">
-            <button className="rounded border border-white/10 px-4 py-2 text-sm text-slate-200 hover:border-app-accent" onClick={() => setSummary(null)}>
-              Analyse another PGN
-            </button>
-          </div>
-        </main>
-      )}
-    </div>
+        )}
+      </main>
+    </AppShell>
   );
 }

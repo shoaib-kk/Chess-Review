@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 class AnalyzeRequest(BaseModel):
     pgn: str = Field(..., min_length=1)
     depth: int = Field(default=16, ge=1, le=24)
+    mode: Literal["fast", "normal", "deep"] = "normal"
     stockfish_path: Optional[str] = None
 
 
@@ -40,8 +41,45 @@ class GameSummaryResponse(BaseModel):
     black_inaccuracies: int
     black_mistakes: int
     black_blunders: int
+    white_accuracy: Optional[float]
+    black_accuracy: Optional[float]
+    user_accuracy: Optional[float] = None
+    average_cp_loss_white: Optional[float]
+    average_cp_loss_black: Optional[float]
+    average_cp_loss_user: Optional[float] = None
+    user_color: Optional[str] = None
+    user_username: Optional[str] = None
+    opponent_username: Optional[str] = None
+    user_result: Optional[str] = None
+    user_inaccuracies: Optional[int] = None
+    user_mistakes: Optional[int] = None
+    user_blunders: Optional[int] = None
     move_analyses: list[MoveAnalysisResponse]
 
 
 class HealthResponse(BaseModel):
     status: str
+
+
+class ChessComGameResponse(BaseModel):
+    white_username: str
+    black_username: str
+    white_result: Optional[str] = None
+    black_result: Optional[str] = None
+    result: str
+    end_time: Optional[int] = None
+    date: Optional[str] = None
+    time_class: Optional[str] = None
+    time_control: Optional[str] = None
+    rated: bool = False
+    rules: Optional[str] = None
+    url: Optional[str] = None
+    pgn: str
+
+
+class ChessComAnalyzeRequest(BaseModel):
+    username: str = Field(..., min_length=1)
+    pgn: str = Field(..., min_length=1)
+    depth: int = Field(default=16, ge=1, le=24)
+    mode: Literal["fast", "normal", "deep"] = "normal"
+    stockfish_path: Optional[str] = None

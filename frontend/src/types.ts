@@ -1,4 +1,5 @@
 export type MoveClassification = "Excellent" | "Inaccuracy" | "Mistake" | "Blunder";
+export type AnalysisMode = "fast" | "normal" | "deep";
 
 export interface MoveAnalysis {
   move_number: number;
@@ -50,6 +51,7 @@ export interface GameSummary {
 export interface AnalyzePayload {
   pgn: string;
   depth: number;
+  mode: AnalysisMode;
   stockfish_path?: string;
 }
 
@@ -71,4 +73,75 @@ export interface ChessComGame {
 
 export interface ChessComAnalyzePayload extends AnalyzePayload {
   username: string;
+}
+
+export interface OpeningInsight {
+  opening_name: string;
+  eco: string;
+  games: number;
+  frequency: number;
+  win_rate: number;
+  avg_accuracy: number | null;
+  avg_cp_loss: number | null;
+}
+
+export interface PlayerInsights {
+  username: string;
+  filters: {
+    limit: number;
+    time_class: "rapid" | "blitz" | "bullet" | null;
+    rated_only: boolean;
+  };
+  summary: {
+    games_analyzed: number;
+    win_rate: number;
+    white_win_rate: number;
+    black_win_rate: number;
+    average_accuracy: number | null;
+    average_cp_loss: number | null;
+    average_game_length: number | null;
+  };
+  openings: {
+    as_white: OpeningInsight[];
+    as_black: OpeningInsight[];
+    responses_to_e4: Array<{ move: string; games: number; frequency: number }>;
+    responses_to_d4: Array<{ move: string; games: number; frequency: number }>;
+  };
+  performance: {
+    last_30: InsightWindow;
+    last_90: InsightWindow;
+    last_180: InsightWindow;
+    trend_notes: string[];
+    trend_points: Array<{
+      date: string | null;
+      accuracy: number;
+      cp_loss: number;
+      blunders: number;
+      rating: number | null;
+    }>;
+    rating_points: Array<{ date: string; rating: number }>;
+  };
+  mistakes: {
+    categories: Array<{ category: string; count: number; percentage: number }>;
+    top_weaknesses: Array<{ category: string; count: number; percentage: number }>;
+  };
+  profile: {
+    style: string;
+    position_preference: string;
+    average_game_length: number;
+    preferred_openings: string[];
+    summary: string;
+    top_weakness: string | null;
+    strengths: string[];
+    weaknesses: string[];
+    recommendations: string[];
+  };
+}
+
+export interface InsightWindow {
+  games: number;
+  win_rate: number;
+  avg_accuracy: number | null;
+  avg_cp_loss: number | null;
+  blunders: number;
 }

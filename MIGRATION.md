@@ -78,7 +78,7 @@ http://localhost:5173
 By default, the frontend calls:
 
 ```text
-http://127.0.0.1:8000
+http://127.0.0.1:8001
 ```
 
 Set `VITE_API_BASE_URL` if the API runs elsewhere.

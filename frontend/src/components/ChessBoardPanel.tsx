@@ -1,7 +1,10 @@
 import { Chessboard } from "react-chessboard";
 import type { GameSummary, MoveAnalysis } from "../types";
+import { ClassificationBadge } from "./ui/Badge";
+import { Button } from "./ui/Button";
+import { Card, CardHeader } from "./ui/Card";
 
-interface ChessBoardPanelProps {
+interface ChessboardPanelProps {
   summary: GameSummary;
   moveIndex: number;
   flipped: boolean;
@@ -20,24 +23,31 @@ function mistakeSquare(move: MoveAnalysis | undefined): string | null {
   return uciSquares(move.played_move_uci)?.[1] ?? null;
 }
 
-export function ChessBoardPanel({
+function moveLabel(move: MoveAnalysis | undefined) {
+  if (!move) return "Starting position";
+  return `${move.move_number}${move.color === "White" ? "." : "..."} ${move.move_played}`;
+}
+
+export function ChessboardPanel({
   summary,
   moveIndex,
   flipped,
   reviewMyMovesOnly = false,
   onFlip,
   onMoveIndexChange,
-}: ChessBoardPanelProps) {
+}: ChessboardPanelProps) {
   const move = moveIndex >= 0 ? summary.move_analyses[moveIndex] : undefined;
   const position = move?.fen_after ?? summary.initial_fen;
   const played = uciSquares(move?.played_move_uci ?? null);
   const best = uciSquares(move?.best_move_uci ?? null);
   const highlightedSquare = mistakeSquare(move);
-  const navigationIndexes = reviewMyMovesOnly && summary.user_color
-    ? summary.move_analyses
-        .map((item, index) => (item.color === summary.user_color ? index : -2))
-        .filter((index) => index >= -1)
-    : summary.move_analyses.map((_, index) => index);
+
+  const navigationIndexes =
+    reviewMyMovesOnly && summary.user_color
+      ? summary.move_analyses
+          .map((item, index) => (item.color === summary.user_color ? index : -2))
+          .filter((index) => index >= 0)
+      : summary.move_analyses.map((_, index) => index);
 
   const firstIndex = reviewMyMovesOnly ? navigationIndexes[0] ?? -1 : -1;
   const lastIndex = navigationIndexes[navigationIndexes.length - 1] ?? summary.total_moves - 1;
@@ -54,57 +64,68 @@ export function ChessBoardPanel({
         [highlightedSquare]: {
           background:
             move?.classification === "Blunder"
-              ? "radial-gradient(circle, rgba(239,68,68,0.75) 0%, rgba(239,68,68,0.28) 70%)"
+              ? "radial-gradient(circle, rgba(239,68,68,0.72) 0%, rgba(239,68,68,0.26) 72%)"
               : move?.classification === "Mistake"
-                ? "radial-gradient(circle, rgba(249,115,22,0.7) 0%, rgba(249,115,22,0.24) 70%)"
-                : "radial-gradient(circle, rgba(250,204,21,0.7) 0%, rgba(250,204,21,0.24) 70%)",
+                ? "radial-gradient(circle, rgba(249,115,22,0.72) 0%, rgba(249,115,22,0.24) 72%)"
+                : "radial-gradient(circle, rgba(234,179,8,0.72) 0%, rgba(234,179,8,0.22) 72%)",
         },
       }
     : {};
 
   return (
-    <section className="rounded bg-app-panel p-4 shadow-panel">
-      <div className="mb-3 flex items-center justify-between">
-        <div>
-          <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Board</p>
-          <p className="font-mono text-sm text-slate-200">
-            {move ? `${move.move_number}${move.color === "White" ? "." : "..."} ${move.move_played}` : "Starting position"}
-          </p>
+    <Card className="overflow-hidden">
+      <CardHeader
+        title="Board"
+        eyebrow="Position"
+        action={<Button variant="ghost" size="sm" onClick={onFlip}>Flip board</Button>}
+      >
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="font-mono text-sm text-app-text">{moveLabel(move)}</span>
+          {move && <ClassificationBadge classification={move.classification} />}
         </div>
-        <button className="rounded border border-white/10 px-3 py-1.5 text-sm text-slate-200 hover:border-app-accent" onClick={onFlip}>
-          Flip
-        </button>
-      </div>
+      </CardHeader>
 
-      <div className="mx-auto max-w-[520px]">
-        <Chessboard
-          position={position}
-          boardOrientation={flipped ? "black" : "white"}
-          arePiecesDraggable={false}
-          customDarkSquareStyle={{ backgroundColor: "#b58863" }}
-          customLightSquareStyle={{ backgroundColor: "#f0d9b5" }}
-          customArrows={arrows as never}
-          customSquareStyles={customSquareStyles}
-        />
-      </div>
-
-      <div className="mt-4 grid grid-cols-5 gap-2">
-        <button className="rounded bg-slate-900 py-2 text-sm hover:bg-slate-800" onClick={() => onMoveIndexChange(firstIndex)}>
-          |&lt;
-        </button>
-        <button className="rounded bg-slate-900 py-2 text-sm hover:bg-slate-800" onClick={() => onMoveIndexChange(reviewMyMovesOnly ? previousIndex : Math.max(-1, moveIndex - 1))}>
-          &lt;
-        </button>
-        <div className="grid place-items-center rounded bg-slate-950 text-sm text-slate-300">
-          {moveIndex + 1}/{summary.total_moves}
+      <div className="px-4 pb-5 sm:px-5">
+        <div className="mx-auto max-w-[560px] rounded-lg bg-slate-950/55 p-3 shadow-inner ring-1 ring-app-border">
+          <Chessboard
+            position={position}
+            boardOrientation={flipped ? "black" : "white"}
+            arePiecesDraggable={false}
+            customDarkSquareStyle={{ backgroundColor: "#b58863" }}
+            customLightSquareStyle={{ backgroundColor: "#f0d9b5" }}
+            customArrows={arrows as never}
+            customSquareStyles={customSquareStyles}
+          />
         </div>
-        <button className="rounded bg-slate-900 py-2 text-sm hover:bg-slate-800" onClick={() => onMoveIndexChange(reviewMyMovesOnly ? nextIndex : Math.min(summary.total_moves - 1, moveIndex + 1))}>
-          &gt;
-        </button>
-        <button className="rounded bg-slate-900 py-2 text-sm hover:bg-slate-800" onClick={() => onMoveIndexChange(lastIndex)}>
-          &gt;|
-        </button>
+
+        <div className="mt-4 grid grid-cols-[1fr_1fr_minmax(74px,0.8fr)_1fr_1fr] gap-2">
+          <Button variant="control" size="sm" onClick={() => onMoveIndexChange(firstIndex)} aria-label="First move">
+            First
+          </Button>
+          <Button
+            variant="control"
+            size="sm"
+            onClick={() => onMoveIndexChange(reviewMyMovesOnly ? previousIndex : Math.max(-1, moveIndex - 1))}
+            aria-label="Previous move"
+          >
+            Prev
+          </Button>
+          <div className="grid h-9 place-items-center rounded-md bg-slate-950/70 px-2 font-mono text-xs text-app-muted ring-1 ring-app-border">
+            {moveIndex + 1}/{summary.total_moves}
+          </div>
+          <Button
+            variant="control"
+            size="sm"
+            onClick={() => onMoveIndexChange(reviewMyMovesOnly ? nextIndex : Math.min(summary.total_moves - 1, moveIndex + 1))}
+            aria-label="Next move"
+          >
+            Next
+          </Button>
+          <Button variant="control" size="sm" onClick={() => onMoveIndexChange(lastIndex)} aria-label="Last move">
+            Last
+          </Button>
+        </div>
       </div>
-    </section>
+    </Card>
   );
 }

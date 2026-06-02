@@ -51,16 +51,32 @@ class StockfishEngine:
         if self.engine:
             self.engine.quit()
 
-    def analyse_position(self, board: chess.Board):
+    def analyse_position(
+        self,
+        board: chess.Board,
+        *,
+        depth: int | None = None,
+        movetime_ms: int | None = None,
+        include_pv: bool = True,
+        pv_limit: int = 8,
+    ):
         if self.engine is None:
             raise RuntimeError("Stockfish engine is not running.")
 
+        limit = (
+            chess.engine.Limit(time=movetime_ms / 1000)
+            if movetime_ms is not None
+            else chess.engine.Limit(depth=depth or self.depth)
+        )
         info = self.engine.analyse(
             board,
-            chess.engine.Limit(depth=self.depth),
+            limit,
         )
         score = info["score"].pov(board.turn)
         eval_cp = score.score(mate_score=100000)
+
+        if not include_pv:
+            return eval_cp, None, []
 
         pv = info.get("pv", [])
         best_move = pv[0] if pv else None
@@ -68,7 +84,7 @@ class StockfishEngine:
 
         pv_san = []
         pv_board = board.copy()
-        for move in pv[:8]:
+        for move in pv[:pv_limit]:
             if move not in pv_board.legal_moves:
                 break
             pv_san.append(pv_board.san(move))

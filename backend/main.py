@@ -1,13 +1,17 @@
 from __future__ import annotations
 
 import sys
+from copy import deepcopy
+from functools import lru_cache
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 
-from .schemas import AnalyzeRequest, GameSummaryResponse, HealthResponse
+from .schemas import AnalyzeRequest, ChessComAnalyzeRequest, ChessComGameResponse, GameSummaryResponse, HealthResponse
 from .serializers import serialize_game_summary
+from .services.chesscom_client import ChessComClientError, get_recent_games
+from .services.player_insights import get_player_insights
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
@@ -26,6 +30,8 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:5173",
         "http://127.0.0.1:5173",
+        "http://localhost:5174",
+        "http://127.0.0.1:5174",
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -41,11 +47,67 @@ def health() -> HealthResponse:
 @app.post("/analyze", response_model=GameSummaryResponse)
 def analyze(request: AnalyzeRequest) -> dict:
     try:
-        summary = analyze_pgn(
-            pgn_text=request.pgn,
-            engine_path=request.stockfish_path,
-            depth=request.depth,
+        return _run_cached_analysis(
+            request.pgn,
+            request.depth,
+            request.mode,
+            request.stockfish_path or "",
+            "",
         )
-        return serialize_game_summary(summary)
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.get("/chesscom/{username}/games", response_model=list[ChessComGameResponse])
+def chesscom_games(username: str, limit: int = Query(default=20, ge=1, le=50)) -> list[dict]:
+    try:
+        return get_recent_games(username, limit=limit)
+    except ChessComClientError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.get("/player-insights/{username}")
+def player_insights(
+    username: str,
+    limit: int = Query(default=200, ge=1, le=300),
+    time_class: str | None = Query(default=None, pattern="^(rapid|blitz|bullet)$"),
+    rated_only: bool = Query(default=False),
+) -> dict:
+    try:
+        return get_player_insights(
+            username=username,
+            limit=limit,
+            time_class=time_class,
+            rated_only=rated_only,
+        )
+    except ChessComClientError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/chesscom/analyze", response_model=GameSummaryResponse)
+def chesscom_analyze(request: ChessComAnalyzeRequest) -> dict:
+    try:
+        return _run_cached_analysis(
+            request.pgn,
+            request.depth,
+            request.mode,
+            request.stockfish_path or "",
+            request.username.strip(),
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+def _run_cached_analysis(pgn: str, depth: int, mode: str, stockfish_path: str, username: str) -> dict:
+    return deepcopy(_cached_analysis_result(pgn, depth, mode, stockfish_path, username))
+
+
+@lru_cache(maxsize=32)
+def _cached_analysis_result(pgn: str, depth: int, mode: str, stockfish_path: str, username: str) -> dict:
+    summary = analyze_pgn(
+        pgn_text=pgn,
+        engine_path=stockfish_path or None,
+        depth=depth,
+        mode=mode,
+    )
+    return serialize_game_summary(summary, username=username or None)

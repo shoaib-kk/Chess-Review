@@ -1,5 +1,5 @@
 import axios from "axios";
-import type { AnalyzePayload, ChessComAnalyzePayload, ChessComGame, GameSummary } from "../types";
+import type { AnalyzePayload, ChessComAnalyzePayload, ChessComGame, GameSummary, PlayerInsights } from "../types";
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL ?? "http://127.0.0.1:8001",
@@ -20,6 +20,20 @@ export async function fetchChessComGames(username: string, limit = 20): Promise<
 
 export async function analyzeChessComGame(payload: ChessComAnalyzePayload): Promise<GameSummary> {
   const response = await api.post<GameSummary>("/chesscom/analyze", payload);
+  return response.data;
+}
+
+export async function fetchPlayerInsights(
+  username: string,
+  params: { limit?: number; time_class?: "rapid" | "blitz" | "bullet" | ""; rated_only?: boolean } = {},
+): Promise<PlayerInsights> {
+  const response = await api.get<PlayerInsights>(`/player-insights/${encodeURIComponent(username)}`, {
+    params: {
+      limit: params.limit ?? 200,
+      time_class: params.time_class || undefined,
+      rated_only: params.rated_only ?? false,
+    },
+  });
   return response.data;
 }
 

@@ -1,25 +1,29 @@
 import { useState } from "react";
+import type { AnalysisMode } from "../types";
+import { Button } from "./ui/Button";
+import { Card, CardHeader } from "./ui/Card";
 
 interface PgnInputProps {
   loading: boolean;
-  onAnalyze: (pgn: string, depth: number) => void;
+  onAnalyze: (pgn: string, depth: number, mode: AnalysisMode) => void;
 }
 
 export function PgnInput({ loading, onAnalyze }: PgnInputProps) {
   const [pgn, setPgn] = useState("");
   const [depth, setDepth] = useState(16);
+  const [mode, setMode] = useState<AnalysisMode>("normal");
 
   const canAnalyze = pgn.trim().length > 0 && !loading;
 
   return (
-    <section className="mx-auto flex w-full max-w-5xl flex-col gap-5 px-4 py-8 lg:px-8">
-      <div className="rounded bg-app-panel p-5 shadow-panel">
-        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h2 className="text-lg font-semibold text-slate-50">Load a PGN</h2>
-            <p className="text-sm text-slate-400">Paste a game or upload a `.pgn` file to start the review.</p>
-          </div>
-          <label className="inline-flex cursor-pointer items-center justify-center rounded border border-white/10 bg-slate-900 px-4 py-2 text-sm font-semibold text-slate-100 hover:border-app-accent">
+    <Card className="overflow-hidden">
+      <CardHeader title="Paste or upload PGN" eyebrow="Manual review">
+        Load any PGN and run the same Stockfish review flow.
+      </CardHeader>
+
+      <div className="px-5 pb-5">
+        <div className="mb-3 flex justify-end">
+          <label className="inline-flex h-10 cursor-pointer items-center justify-center rounded-md bg-app-panelSecondary px-3 text-sm font-semibold text-app-text transition hover:bg-slate-700">
             Upload PGN
             <input
               className="hidden"
@@ -35,14 +39,28 @@ export function PgnInput({ loading, onAnalyze }: PgnInputProps) {
         </div>
 
         <textarea
-          className="h-72 w-full resize-y rounded border border-white/10 bg-slate-950 p-4 font-mono text-sm leading-6 text-slate-100 outline-none focus:border-app-accent"
+          className="h-80 w-full resize-y rounded-md bg-slate-950/80 p-4 font-mono text-sm leading-6 text-app-text outline-none ring-1 ring-app-border transition placeholder:text-slate-600 focus:ring-2 focus:ring-app-accent/70"
           value={pgn}
-          placeholder='[Event "Live Chess"]&#10;1. e4 c6 2. Nc3 d5 ...'
+          placeholder={'[Event "Live Chess"]\n1. e4 c6 2. Nc3 d5 ...'}
           onChange={(event) => setPgn(event.target.value)}
         />
 
         <div className="mt-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <label className="flex items-center gap-3 text-sm text-slate-300">
+          <div className="flex flex-wrap items-center gap-2 rounded-md bg-slate-950/60 p-1 ring-1 ring-app-border">
+            {(["fast", "normal", "deep"] as AnalysisMode[]).map((item) => (
+              <button
+                key={item}
+                className={`h-8 rounded px-3 text-xs font-bold capitalize transition ${
+                  mode === item ? "bg-app-accent text-white" : "text-app-muted hover:bg-app-panelSecondary hover:text-app-text"
+                }`}
+                onClick={() => setMode(item)}
+              >
+                {item}
+              </button>
+            ))}
+          </div>
+
+          <label className="flex items-center gap-3 text-sm text-app-muted">
             Depth
             <input
               type="range"
@@ -52,17 +70,13 @@ export function PgnInput({ loading, onAnalyze }: PgnInputProps) {
               onChange={(event) => setDepth(Number(event.target.value))}
               className="accent-app-accent"
             />
-            <span className="w-8 text-right font-mono text-slate-100">{depth}</span>
+            <span className="w-8 text-right font-mono text-app-text">{depth}</span>
           </label>
-          <button
-            className="rounded bg-app-accent px-5 py-2.5 text-sm font-bold text-white shadow-lg shadow-blue-500/20 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-400"
-            disabled={!canAnalyze}
-            onClick={() => onAnalyze(pgn.trim(), depth)}
-          >
+          <Button variant="primary" disabled={!canAnalyze} onClick={() => onAnalyze(pgn.trim(), depth, mode)}>
             {loading ? "Analysing..." : "Analyse Game"}
-          </button>
+          </Button>
         </div>
       </div>
-    </section>
+    </Card>
   );
 }

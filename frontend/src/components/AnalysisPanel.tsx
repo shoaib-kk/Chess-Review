@@ -1,15 +1,17 @@
 import type { GameSummary, MoveClassification } from "../types";
+import { ClassificationBadge } from "./ui/Badge";
+import { Card, CardHeader } from "./ui/Card";
 
 interface AnalysisPanelProps {
   summary: GameSummary;
   currentIndex: number;
 }
 
-const COLORS: Record<MoveClassification, string> = {
-  Excellent: "#4ade80",
-  Inaccuracy: "#facc15",
-  Mistake: "#f97316",
-  Blunder: "#ef4444",
+const accentClasses: Record<MoveClassification, string> = {
+  Excellent: "border-app-good/70 bg-app-good/10",
+  Inaccuracy: "border-app-warning/70 bg-app-warning/10",
+  Mistake: "border-app-mistake/70 bg-app-mistake/10",
+  Blunder: "border-app-blunder/70 bg-app-blunder/10",
 };
 
 function fmtEval(value: number | null): string {
@@ -18,99 +20,85 @@ function fmtEval(value: number | null): string {
   return `${value > 0 ? "+" : ""}${(value / 100).toFixed(2)}`;
 }
 
+function coachCopy(classification: MoveClassification) {
+  if (classification === "Excellent") return "Strong choice. The move stays close to the engine's preferred path.";
+  if (classification === "Inaccuracy") return "Playable, but the position offered a cleaner route.";
+  if (classification === "Mistake") return "This changed the evaluation noticeably. Compare it with the best move.";
+  return "Critical swing. Start with the best move and principal variation.";
+}
+
 export function AnalysisPanel({ summary, currentIndex }: AnalysisPanelProps) {
   const move = currentIndex >= 0 ? summary.move_analyses[currentIndex] : undefined;
 
   return (
-    <section className="rounded bg-app-panel p-4 shadow-panel">
-      <div className="mb-4 flex flex-col gap-3 border-b border-white/10 pb-4 md:flex-row md:items-center md:justify-between">
-        <div>
-          <p className="text-xs text-slate-500">{summary.event} · {summary.date}</p>
-          <h2 className="text-lg font-bold text-slate-50">
-            <span className="text-app-lightSquare">{summary.white_player}</span>
-            <span className="mx-2 text-slate-500">vs</span>
-            <span className="text-app-darkSquare">{summary.black_player}</span>
-          </h2>
-        </div>
-        <div className="rounded bg-slate-950 px-3 py-2 font-mono text-sm text-slate-200">{summary.result}</div>
-      </div>
+    <Card className="overflow-hidden">
+      <CardHeader title="Coach panel" eyebrow="Selected move">
+        {summary.white_player} vs {summary.black_player} · {summary.result}
+      </CardHeader>
 
-      {!move ? (
-        <div className="text-sm text-slate-400">Select a move to see the engine review.</div>
-      ) : (
-        <div className="grid gap-4 lg:grid-cols-[1fr_1.25fr]">
-          <div className="rounded border-l-4 bg-slate-950 p-4" style={{ borderColor: COLORS[move.classification] }}>
-            <div className="mb-3 flex items-center justify-between">
-              <div className="font-mono text-xl font-bold text-slate-50">
-                {move.move_number}
-                {move.color === "White" ? "." : "..."} {move.move_played}
+      <div className="px-5 pb-5">
+        {!move ? (
+          <div className="rounded-lg bg-slate-950/70 p-5 text-sm text-app-muted ring-1 ring-app-border">
+            Select a move from the graph, board controls, or move list to see the engine review.
+          </div>
+        ) : (
+          <div className={`rounded-lg border p-4 ${accentClasses[move.classification]}`}>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-[0.14em] text-app-muted">Move played</p>
+                <div className="mt-1 font-mono text-2xl font-black text-app-text">
+                  {move.move_number}
+                  {move.color === "White" ? "." : "..."} {move.move_played}
+                </div>
               </div>
-              <span className="rounded px-2.5 py-1 text-xs font-black text-slate-950" style={{ background: COLORS[move.classification] }}>
-                {move.classification}
-              </span>
+              <ClassificationBadge classification={move.classification} />
             </div>
-            <div className="grid grid-cols-2 gap-3 text-sm">
-              <Stat label="Best move" value={move.best_move ?? "-"} />
-              <Stat label="CP loss" value={move.cp_loss === null ? "-" : `${Math.round(move.cp_loss)} cp`} />
-              <Stat label="Eval before" value={fmtEval(move.eval_before)} />
-              <Stat label="Eval after" value={fmtEval(move.eval_after)} />
+
+            <p className="mt-4 max-w-2xl text-sm leading-6 text-slate-300">{coachCopy(move.classification)}</p>
+
+            <div className="mt-4 grid gap-3 sm:grid-cols-4">
+              <Metric label="Best move" value={move.best_move ?? "-"} />
+              <Metric label="CP loss" value={move.cp_loss === null ? "-" : `${Math.round(move.cp_loss)} cp`} />
+              <Metric label="Eval before" value={fmtEval(move.eval_before)} />
+              <Metric label="Eval after" value={fmtEval(move.eval_after)} />
+            </div>
+
+            <div className="mt-4 rounded-md bg-slate-950/70 p-4 ring-1 ring-app-border">
+              <p className="mb-2 text-xs font-bold uppercase tracking-[0.14em] text-app-muted">Principal variation</p>
+              <p className="min-h-8 font-mono text-sm leading-6 text-slate-300">
+                {move.pv.length ? move.pv.join(" ") : "No PV returned"}
+              </p>
             </div>
           </div>
+        )}
 
-          <div className="rounded bg-slate-950 p-4">
-            <p className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">Principal Variation</p>
-            <p className="min-h-12 font-mono text-sm leading-6 text-slate-300">
-              {move.pv.length ? move.pv.join(" ") : "No PV returned"}
-            </p>
+        {summary.user_username && (
+          <div className="mt-4 grid gap-2 text-sm sm:grid-cols-4">
+            <UserStat label="My inaccuracies" value={summary.user_inaccuracies} />
+            <UserStat label="My mistakes" value={summary.user_mistakes} />
+            <UserStat label="My blunders" value={summary.user_blunders} />
+            <UserStat label="My result" value={summary.user_result ?? "-"} />
           </div>
-        </div>
-      )}
-
-      <div className="mt-4 grid gap-2 text-sm sm:grid-cols-3">
-        <SummaryStat label="Inaccuracies" white={summary.white_inaccuracies} black={summary.black_inaccuracies} />
-        <SummaryStat label="Mistakes" white={summary.white_mistakes} black={summary.black_mistakes} />
-        <SummaryStat label="Blunders" white={summary.white_blunders} black={summary.black_blunders} />
+        )}
       </div>
-
-      {summary.user_username && (
-        <div className="mt-4 rounded bg-slate-950 p-4">
-          <p className="mb-3 text-xs font-bold uppercase tracking-wide text-slate-500">My Summary</p>
-          <div className="grid gap-2 text-sm sm:grid-cols-4">
-            <UserStat label="Inaccuracies" value={summary.user_inaccuracies} />
-            <UserStat label="Mistakes" value={summary.user_mistakes} />
-            <UserStat label="Blunders" value={summary.user_blunders} />
-            <UserStat label="Result" value={summary.user_result ?? "-"} />
-          </div>
-        </div>
-      )}
-    </section>
+    </Card>
   );
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
+function Metric({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded bg-app-panel/70 p-3">
-      <div className="text-xs text-slate-500">{label}</div>
-      <div className="mt-1 font-mono font-semibold text-slate-100">{value}</div>
-    </div>
-  );
-}
-
-function SummaryStat({ label, white, black }: { label: string; white: number; black: number }) {
-  return (
-    <div className="flex items-center justify-between rounded bg-slate-950 px-3 py-2">
-      <span className="text-app-lightSquare">{white}</span>
-      <span className="text-slate-400">{label}</span>
-      <span className="text-app-darkSquare">{black}</span>
+    <div className="rounded-md bg-slate-950/70 p-3 ring-1 ring-app-border">
+      <div className="text-[11px] font-bold uppercase tracking-[0.12em] text-app-muted">{label}</div>
+      <div className="mt-2 truncate font-mono text-sm font-semibold text-app-text">{value}</div>
     </div>
   );
 }
 
 function UserStat({ label, value }: { label: string; value: number | string | null }) {
   return (
-    <div className="rounded bg-app-panel/70 p-3">
-      <div className="text-xs text-slate-500">{label}</div>
-      <div className="mt-1 font-mono font-semibold text-slate-100">{value ?? "-"}</div>
+    <div className="rounded-md bg-app-panelSecondary/70 p-3">
+      <div className="text-xs text-app-muted">{label}</div>
+      <div className="mt-1 font-mono font-semibold text-app-text">{value ?? "-"}</div>
     </div>
   );
 }
