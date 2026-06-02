@@ -71,6 +71,18 @@ export function AnalysisPanel({ summary, currentIndex }: AnalysisPanelProps) {
         <SummaryStat label="Mistakes" white={summary.white_mistakes} black={summary.black_mistakes} />
         <SummaryStat label="Blunders" white={summary.white_blunders} black={summary.black_blunders} />
       </div>
+
+      {summary.user_username && (
+        <div className="mt-4 rounded bg-slate-950 p-4">
+          <p className="mb-3 text-xs font-bold uppercase tracking-wide text-slate-500">My Summary</p>
+          <div className="grid gap-2 text-sm sm:grid-cols-4">
+            <UserStat label="Inaccuracies" value={summary.user_inaccuracies} />
+            <UserStat label="Mistakes" value={summary.user_mistakes} />
+            <UserStat label="Blunders" value={summary.user_blunders} />
+            <UserStat label="Result" value={summary.user_result ?? "-"} />
+          </div>
+        </div>
+      )}
     </section>
   );
 }
@@ -90,6 +102,15 @@ function SummaryStat({ label, white, black }: { label: string; white: number; bl
       <span className="text-app-lightSquare">{white}</span>
       <span className="text-slate-400">{label}</span>
       <span className="text-app-darkSquare">{black}</span>
+    </div>
+  );
+}
+
+function UserStat({ label, value }: { label: string; value: number | string | null }) {
+  return (
+    <div className="rounded bg-app-panel/70 p-3">
+      <div className="text-xs text-slate-500">{label}</div>
+      <div className="mt-1 font-mono font-semibold text-slate-100">{value ?? "-"}</div>
     </div>
   );
 }

@@ -5,6 +5,7 @@ interface ChessBoardPanelProps {
   summary: GameSummary;
   moveIndex: number;
   flipped: boolean;
+  reviewMyMovesOnly?: boolean;
   onFlip: () => void;
   onMoveIndexChange: (index: number) => void;
 }
@@ -23,6 +24,7 @@ export function ChessBoardPanel({
   summary,
   moveIndex,
   flipped,
+  reviewMyMovesOnly = false,
   onFlip,
   onMoveIndexChange,
 }: ChessBoardPanelProps) {
@@ -31,6 +33,16 @@ export function ChessBoardPanel({
   const played = uciSquares(move?.played_move_uci ?? null);
   const best = uciSquares(move?.best_move_uci ?? null);
   const highlightedSquare = mistakeSquare(move);
+  const navigationIndexes = reviewMyMovesOnly && summary.user_color
+    ? summary.move_analyses
+        .map((item, index) => (item.color === summary.user_color ? index : -2))
+        .filter((index) => index >= -1)
+    : summary.move_analyses.map((_, index) => index);
+
+  const firstIndex = reviewMyMovesOnly ? navigationIndexes[0] ?? -1 : -1;
+  const lastIndex = navigationIndexes[navigationIndexes.length - 1] ?? summary.total_moves - 1;
+  const previousIndex = [...navigationIndexes].reverse().find((index) => index < moveIndex) ?? firstIndex;
+  const nextIndex = navigationIndexes.find((index) => index > moveIndex) ?? lastIndex;
 
   const arrows = [
     played ? [played[0], played[1], "#3b82f6"] : null,
@@ -77,19 +89,19 @@ export function ChessBoardPanel({
       </div>
 
       <div className="mt-4 grid grid-cols-5 gap-2">
-        <button className="rounded bg-slate-900 py-2 text-sm hover:bg-slate-800" onClick={() => onMoveIndexChange(-1)}>
+        <button className="rounded bg-slate-900 py-2 text-sm hover:bg-slate-800" onClick={() => onMoveIndexChange(firstIndex)}>
           |&lt;
         </button>
-        <button className="rounded bg-slate-900 py-2 text-sm hover:bg-slate-800" onClick={() => onMoveIndexChange(Math.max(-1, moveIndex - 1))}>
+        <button className="rounded bg-slate-900 py-2 text-sm hover:bg-slate-800" onClick={() => onMoveIndexChange(reviewMyMovesOnly ? previousIndex : Math.max(-1, moveIndex - 1))}>
           &lt;
         </button>
         <div className="grid place-items-center rounded bg-slate-950 text-sm text-slate-300">
           {moveIndex + 1}/{summary.total_moves}
         </div>
-        <button className="rounded bg-slate-900 py-2 text-sm hover:bg-slate-800" onClick={() => onMoveIndexChange(Math.min(summary.total_moves - 1, moveIndex + 1))}>
+        <button className="rounded bg-slate-900 py-2 text-sm hover:bg-slate-800" onClick={() => onMoveIndexChange(reviewMyMovesOnly ? nextIndex : Math.min(summary.total_moves - 1, moveIndex + 1))}>
           &gt;
         </button>
-        <button className="rounded bg-slate-900 py-2 text-sm hover:bg-slate-800" onClick={() => onMoveIndexChange(summary.total_moves - 1)}>
+        <button className="rounded bg-slate-900 py-2 text-sm hover:bg-slate-800" onClick={() => onMoveIndexChange(lastIndex)}>
           &gt;|
         </button>
       </div>

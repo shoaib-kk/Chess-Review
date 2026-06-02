@@ -4,6 +4,7 @@ interface MoveListProps {
   summary: GameSummary;
   currentIndex: number;
   onSelectMove: (index: number) => void;
+  reviewMyMovesOnly?: boolean;
 }
 
 const BADGES: Record<MoveClassification, string> = {
@@ -50,10 +51,12 @@ function MoveButton({
   );
 }
 
-export function MoveList({ summary, currentIndex, onSelectMove }: MoveListProps) {
+export function MoveList({ summary, currentIndex, onSelectMove, reviewMyMovesOnly = false }: MoveListProps) {
   const pairs: Array<{ moveNumber: number; white?: [MoveAnalysis, number]; black?: [MoveAnalysis, number] }> = [];
+  const userColor = reviewMyMovesOnly ? summary.user_color : null;
 
   summary.move_analyses.forEach((move, index) => {
+    if (userColor && move.color !== userColor) return;
     let pair = pairs.find((item) => item.moveNumber === move.move_number);
     if (!pair) {
       pair = { moveNumber: move.move_number };
@@ -65,7 +68,12 @@ export function MoveList({ summary, currentIndex, onSelectMove }: MoveListProps)
 
   return (
     <section className="rounded bg-app-panel p-4 shadow-panel">
-      <p className="mb-3 text-xs font-bold uppercase tracking-wide text-slate-500">Moves</p>
+      <div className="mb-3 flex items-center justify-between">
+        <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
+          {userColor ? `${userColor} Moves` : "Moves"}
+        </p>
+        {userColor && <span className="text-xs text-slate-500">filtered</span>}
+      </div>
       <div className="max-h-[360px] space-y-2 overflow-y-auto pr-1">
         {pairs.map((pair) => (
           <div key={pair.moveNumber} className="grid grid-cols-[42px_1fr_1fr] items-center gap-2">
