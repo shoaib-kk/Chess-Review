@@ -4,3 +4,7 @@ __pycache__/
 
 # Local Stockfish engine binaries are large and machine-specific.
 stockfish/
+
+# Frontend dependencies and build output.
+frontend/node_modules/
+frontend/dist/
