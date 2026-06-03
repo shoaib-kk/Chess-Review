@@ -9,12 +9,13 @@ import {
   YAxis,
 } from "recharts";
 import type { GameSummary, MoveClassification } from "../types";
-import { Card, CardHeader } from "./ui/Card";
+import { Card } from "./ui/Card";
 
 interface EvalGraphPanelProps {
   summary: GameSummary;
   currentIndex: number;
   onSelectMove: (index: number) => void;
+  embedded?: boolean;
 }
 
 const COLORS: Record<MoveClassification, string> = {
@@ -29,7 +30,7 @@ function clampEval(value: number | null): number {
   return Math.max(-10, Math.min(10, value));
 }
 
-export function EvalGraphPanel({ summary, currentIndex, onSelectMove }: EvalGraphPanelProps) {
+export function EvalGraphPanel({ summary, currentIndex, onSelectMove, embedded = false }: EvalGraphPanelProps) {
   const data = summary.move_analyses.map((move, index) => ({
     index,
     label: `${move.move_number}${move.color === "White" ? "." : "..."} ${move.move_played}`,
@@ -38,12 +39,13 @@ export function EvalGraphPanel({ summary, currentIndex, onSelectMove }: EvalGrap
     cpLoss: move.cp_loss,
   }));
 
-  return (
-    <Card className="overflow-hidden">
-      <CardHeader title="Evaluation" eyebrow="Engine line">
-        White advantage above zero
-      </CardHeader>
-      <div className="h-56 px-3 pb-4">
+  const content = (
+    <>
+      <div className="px-5 pb-2 pt-4">
+        <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-app-muted">Engine line</p>
+        <h2 className="mt-1 text-base font-medium text-app-text">Evaluation</h2>
+      </div>
+      <div className="h-48 px-3 pb-4">
         <ResponsiveContainer width="100%" height="100%">
           <LineChart
             data={data}
@@ -64,7 +66,7 @@ export function EvalGraphPanel({ summary, currentIndex, onSelectMove }: EvalGrap
             />
             <Tooltip
               cursor={{ stroke: "#3b82f6", strokeWidth: 1, strokeDasharray: "4 4" }}
-              contentStyle={{ background: "#111827", border: "1px solid #263244", borderRadius: 8, boxShadow: "0 18px 40px rgba(0,0,0,0.35)" }}
+              contentStyle={{ background: "#111827", border: "1px solid #263244", borderRadius: 6 }}
               labelStyle={{ color: "#f8fafc" }}
               formatter={(value, _name, props) => [`${Number(value).toFixed(2)}`, props.payload.label]}
             />
@@ -95,6 +97,14 @@ export function EvalGraphPanel({ summary, currentIndex, onSelectMove }: EvalGrap
           </LineChart>
         </ResponsiveContainer>
       </div>
+    </>
+  );
+
+  if (embedded) return <section>{content}</section>;
+
+  return (
+    <Card className="overflow-hidden ring-1 ring-app-border/70">
+      {content}
     </Card>
   );
 }

@@ -19,13 +19,24 @@ import { OpeningRepertoirePage } from "./components/OpeningRepertoirePage";
 import { PlayerInsightsPage } from "./components/PlayerInsightsPage";
 import { PgnInput } from "./components/PgnInput";
 import { SummaryStrip } from "./components/SummaryStrip";
+import { Button } from "./components/ui/Button";
+import { Card } from "./components/ui/Card";
 import type { AnalysisMode, ChessComGame, GameSummary, OpeningRepertoire, PlayerInsights, TimeClassFilter } from "./types";
 
 type AppMode = "chesscom" | "pgn" | "insights" | "repertoire";
+const USERNAME_STORAGE_KEY = "cr_username";
 
 export default function App() {
   const [apiStatus, setApiStatus] = useState<"checking" | "ok" | "down">("checking");
   const [activeMode, setActiveMode] = useState<AppMode>("chesscom");
+  const [sharedUsername, setSharedUsername] = useState(() => localStorage.getItem(USERNAME_STORAGE_KEY) ?? "");
+  const [chessComAnalysisMode, setChessComAnalysisMode] = useState<AnalysisMode>("normal");
+  const [playerInsightsLimit, setPlayerInsightsLimit] = useState(200);
+  const [playerInsightsTimeClass, setPlayerInsightsTimeClass] = useState<TimeClassFilter>("");
+  const [playerInsightsRatedOnly, setPlayerInsightsRatedOnly] = useState(false);
+  const [repertoireLimit, setRepertoireLimit] = useState(500);
+  const [repertoireTimeClass, setRepertoireTimeClass] = useState<TimeClassFilter>("");
+  const [repertoireRatedOnly, setRepertoireRatedOnly] = useState(false);
   const [summary, setSummary] = useState<GameSummary | null>(null);
   const [moveIndex, setMoveIndex] = useState(-1);
   const [flipped, setFlipped] = useState(false);
@@ -38,6 +49,12 @@ export default function App() {
       .then(() => setApiStatus("ok"))
       .catch(() => setApiStatus("down"));
   }, []);
+
+  useEffect(() => {
+    const trimmed = sharedUsername.trim();
+    if (trimmed) localStorage.setItem(USERNAME_STORAGE_KEY, trimmed);
+    else localStorage.removeItem(USERNAME_STORAGE_KEY);
+  }, [sharedUsername]);
 
   useEffect(() => {
     if (!summary) return;
@@ -102,6 +119,7 @@ export default function App() {
   async function handleFetchChessComGames(username: string): Promise<ChessComGame[]> {
     setError(null);
     try {
+      setSharedUsername(username);
       const games = await fetchChessComGames(username);
       setApiStatus("ok");
       return games;
@@ -115,6 +133,7 @@ export default function App() {
     setLoading(true);
     setError(null);
     try {
+      setSharedUsername(username);
       const result = await analyzeChessComGame({ username, pgn, depth: 16, mode });
       setSummary(result);
       setMoveIndex(-1);
@@ -135,6 +154,7 @@ export default function App() {
     setLoading(true);
     setError(null);
     try {
+      setSharedUsername(username);
       const result = await fetchPlayerInsights(username, params);
       setApiStatus("ok");
       return result;
@@ -153,6 +173,7 @@ export default function App() {
     setLoading(true);
     setError(null);
     try {
+      setSharedUsername(username);
       const result = await fetchOpeningRepertoire(username, params);
       setApiStatus("ok");
       return result;
@@ -171,104 +192,214 @@ export default function App() {
     setError(null);
   }
 
+  function importAnotherGame() {
+    startNewReview();
+    setActiveMode("chesscom");
+  }
+
+  function handleLogout() {
+    setSharedUsername("");
+    startNewReview();
+    setActiveMode("chesscom");
+  }
+
+  const signedIn = Boolean(sharedUsername.trim());
+
   return (
     <AppShell>
-      <Header
-        apiStatus={apiStatus}
-        activeMode={activeMode}
-        onModeChange={setActiveMode}
-        onNewReview={summary ? startNewReview : undefined}
-      />
+      {!signedIn ? (
+        <HomeLogin
+          apiStatus={apiStatus}
+          initialUsername={sharedUsername}
+          onLogin={(username) => {
+            setSharedUsername(username.trim());
+            setActiveMode("chesscom");
+          }}
+        />
+      ) : (
+        <>
+          <Header
+            apiStatus={apiStatus}
+            activeMode={activeMode}
+            onModeChange={setActiveMode}
+            username={sharedUsername.trim()}
+            onLogout={handleLogout}
+            onNewReview={summary ? startNewReview : undefined}
+          />
 
-      <main className="mx-auto w-full max-w-7xl px-4 py-6 lg:px-6">
-        {error && (
-          <div className="mb-5 rounded-lg bg-app-blunder/10 px-4 py-3 text-sm text-red-200 ring-1 ring-app-blunder/25">
-            {error}
-          </div>
-        )}
-
-        {!summary ? (
-          <div className="mx-auto max-w-3xl">
-            {activeMode === "chesscom" ? (
-              <ChessComImport
-                loading={loading}
-                onFetchGames={handleFetchChessComGames}
-                onAnalyzeGame={handleAnalyzeChessComGame}
-              />
-            ) : activeMode === "pgn" ? (
-              <PgnInput loading={loading} onAnalyze={handleAnalyze} />
-            ) : activeMode === "insights" ? (
-              <PlayerInsightsPage loading={loading} onFetchInsights={handleFetchPlayerInsights} />
-            ) : (
-              <OpeningRepertoirePage loading={loading} onFetchRepertoire={handleFetchOpeningRepertoire} />
+          <main className="mx-auto w-full max-w-7xl px-4 py-6 lg:ml-72 lg:px-6">
+            {error && (
+              <div className="mb-5 border-[0.5px] border-app-border bg-app-panel px-4 py-3 text-sm text-app-text">
+                {error}
+              </div>
             )}
-          </div>
-        ) : (
-          <div className="grid gap-5">
-            {activeMode === "insights" ? (
-              <PlayerInsightsPage
-                loading={loading}
-                onFetchInsights={handleFetchPlayerInsights}
-                initialUsername={summary.user_username}
-              />
-            ) : activeMode === "repertoire" ? (
-              <OpeningRepertoirePage
-                loading={loading}
-                onFetchRepertoire={handleFetchOpeningRepertoire}
-                initialUsername={summary.user_username}
-              />
-            ) : (
-            <>
-            <SummaryStrip summary={summary} />
 
-            {summary.user_username && (
-              <section className="flex flex-col gap-3 rounded-lg bg-app-panel px-5 py-4 shadow-panel ring-1 ring-app-border/70 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-app-muted">Player perspective</p>
-                  <p className="mt-1 text-sm text-slate-300">
-                    Reviewing {summary.user_username} as {summary.user_color} vs {summary.opponent_username ?? "opponent"}
-                  </p>
-                </div>
-                <label className="flex items-center gap-3 text-sm font-semibold text-app-text">
-                  <input
-                    type="checkbox"
-                    className="h-4 w-4 accent-app-accent"
-                    checked={reviewMyMovesOnly}
-                    onChange={(event) => setReviewMyMovesOnly(event.target.checked)}
+            {!summary ? (
+              <div className="mx-auto max-w-3xl">
+                {activeMode === "chesscom" ? (
+                  <ChessComImport
+                    loading={loading}
+                    username={sharedUsername}
+                    onUsernameChange={setSharedUsername}
+                    mode={chessComAnalysisMode}
+                    onModeChange={setChessComAnalysisMode}
+                    onFetchGames={handleFetchChessComGames}
+                    onAnalyzeGame={handleAnalyzeChessComGame}
                   />
-                  Review my moves only
-                </label>
-              </section>
-            )}
-
-            <div className="grid gap-5 lg:grid-cols-[minmax(360px,45%)_minmax(0,55%)]">
-              <div className="min-w-0">
-                <ChessboardPanel
-                  summary={summary}
-                  moveIndex={moveIndex}
-                  flipped={flipped}
-                  reviewMyMovesOnly={reviewMyMovesOnly}
-                  onFlip={() => setFlipped((value) => !value)}
-                  onMoveIndexChange={setMoveIndex}
-                />
+                ) : activeMode === "pgn" ? (
+                  <PgnInput loading={loading} onAnalyze={handleAnalyze} />
+                ) : activeMode === "insights" ? (
+                  <PlayerInsightsPage
+                    loading={loading}
+                    username={sharedUsername}
+                    onUsernameChange={setSharedUsername}
+                    limit={playerInsightsLimit}
+                    onLimitChange={setPlayerInsightsLimit}
+                    timeClass={playerInsightsTimeClass}
+                    onTimeClassChange={setPlayerInsightsTimeClass}
+                    ratedOnly={playerInsightsRatedOnly}
+                    onRatedOnlyChange={setPlayerInsightsRatedOnly}
+                    onFetchInsights={handleFetchPlayerInsights}
+                  />
+                ) : (
+                  <OpeningRepertoirePage
+                    loading={loading}
+                    username={sharedUsername}
+                    onUsernameChange={setSharedUsername}
+                    limit={repertoireLimit}
+                    onLimitChange={setRepertoireLimit}
+                    timeClass={repertoireTimeClass}
+                    onTimeClassChange={setRepertoireTimeClass}
+                    ratedOnly={repertoireRatedOnly}
+                    onRatedOnlyChange={setRepertoireRatedOnly}
+                    onFetchRepertoire={handleFetchOpeningRepertoire}
+                  />
+                )}
               </div>
-
-              <div className="grid min-w-0 gap-5">
-                <EvalGraphPanel summary={summary} currentIndex={moveIndex} onSelectMove={setMoveIndex} />
-                <MoveListPanel
+            ) : (
+              <div className="grid gap-5">
+                {activeMode === "insights" ? (
+                  <PlayerInsightsPage
+                    loading={loading}
+                    username={sharedUsername || summary.user_username || ""}
+                    onUsernameChange={setSharedUsername}
+                    limit={playerInsightsLimit}
+                    onLimitChange={setPlayerInsightsLimit}
+                    timeClass={playerInsightsTimeClass}
+                    onTimeClassChange={setPlayerInsightsTimeClass}
+                    ratedOnly={playerInsightsRatedOnly}
+                    onRatedOnlyChange={setPlayerInsightsRatedOnly}
+                    onFetchInsights={handleFetchPlayerInsights}
+                  />
+                ) : activeMode === "repertoire" ? (
+                  <OpeningRepertoirePage
+                    loading={loading}
+                    username={sharedUsername || summary.user_username || ""}
+                    onUsernameChange={setSharedUsername}
+                    limit={repertoireLimit}
+                    onLimitChange={setRepertoireLimit}
+                    timeClass={repertoireTimeClass}
+                    onTimeClassChange={setRepertoireTimeClass}
+                    ratedOnly={repertoireRatedOnly}
+                    onRatedOnlyChange={setRepertoireRatedOnly}
+                    onFetchRepertoire={handleFetchOpeningRepertoire}
+                  />
+                ) : (
+                <>
+                <SummaryStrip
                   summary={summary}
-                  currentIndex={moveIndex}
-                  onSelectMove={setMoveIndex}
                   reviewMyMovesOnly={reviewMyMovesOnly}
+                  onReviewMyMovesOnlyChange={setReviewMyMovesOnly}
+                  onImportGame={importAnotherGame}
                 />
-                <AnalysisPanel summary={summary} currentIndex={moveIndex} />
+
+                <div className="grid items-start gap-6 xl:grid-cols-[minmax(460px,48%)_minmax(0,52%)]">
+                  <div className="min-w-0">
+                    <ChessboardPanel
+                      summary={summary}
+                      moveIndex={moveIndex}
+                      flipped={flipped}
+                      reviewMyMovesOnly={reviewMyMovesOnly}
+                      onFlip={() => setFlipped((value) => !value)}
+                      onMoveIndexChange={setMoveIndex}
+                    />
+                  </div>
+
+                  <section className="min-w-0 overflow-hidden bg-app-panel">
+                    <EvalGraphPanel summary={summary} currentIndex={moveIndex} onSelectMove={setMoveIndex} embedded />
+                    <div className="border-t border-app-border" />
+                    <MoveListPanel
+                      summary={summary}
+                      currentIndex={moveIndex}
+                      onSelectMove={setMoveIndex}
+                      reviewMyMovesOnly={reviewMyMovesOnly}
+                      embedded
+                    />
+                    <div className="border-t border-app-border" />
+                    <AnalysisPanel summary={summary} currentIndex={moveIndex} embedded />
+                  </section>
+                </div>
+                </>
+                )}
               </div>
-            </div>
-            </>
             )}
-          </div>
-        )}
-      </main>
+          </main>
+        </>
+      )}
     </AppShell>
+  );
+}
+
+function HomeLogin({
+  apiStatus,
+  initialUsername,
+  onLogin,
+}: {
+  apiStatus: "checking" | "ok" | "down";
+  initialUsername: string;
+  onLogin: (username: string) => void;
+}) {
+  const [username, setUsername] = useState(initialUsername);
+
+  function submit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (username.trim()) onLogin(username);
+  }
+
+  return (
+    <main className="mx-auto grid min-h-screen w-full max-w-5xl place-items-center px-4 py-8">
+      <Card className="w-full max-w-xl overflow-hidden">
+        <div className="border-b border-app-border/70 px-6 py-5">
+          <div className="flex items-center gap-3">
+            <div className="grid h-11 w-11 shrink-0 place-items-center border-[0.5px] border-app-border text-sm font-medium text-app-text">
+              CR
+            </div>
+            <div>
+              <h1 className="text-2xl font-medium text-app-text">Chess Review</h1>
+              <p className="text-sm text-app-muted">Sign in with your Chess.com username</p>
+            </div>
+          </div>
+        </div>
+        <form className="grid gap-4 px-6 py-6" onSubmit={submit}>
+          <label className="grid gap-2">
+            <span className="text-[11px] font-medium uppercase tracking-[0.18em] text-app-muted">Chess.com username</span>
+            <input
+              className="h-12 border-[0.5px] border-app-border bg-app-panel px-3 text-app-text outline-none transition placeholder:text-[#9b9b9b] focus:border-app-text"
+              value={username}
+              placeholder="e.g. hikaru"
+              autoFocus
+              onChange={(event) => setUsername(event.target.value)}
+            />
+          </label>
+          <Button variant="primary" disabled={!username.trim()} type="submit">
+            Continue
+          </Button>
+          <div className="flex items-center gap-2 border-[0.5px] border-app-border bg-app-panel px-3 py-2 text-xs text-app-muted">
+            <span className="h-2 w-2 bg-app-text" />
+            API {apiStatus}
+          </div>
+        </form>
+      </Card>
+    </main>
   );
 }

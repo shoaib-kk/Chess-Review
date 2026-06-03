@@ -1,40 +1,15 @@
 import type { GameSummary } from "../types";
-import { Card } from "./ui/Card";
+import { Button } from "./ui/Button";
 
 interface SummaryStripProps {
   summary: GameSummary;
+  reviewMyMovesOnly?: boolean;
+  onReviewMyMovesOnlyChange?: (value: boolean) => void;
+  onImportGame?: () => void;
 }
 
 function fmt(value: number | null, suffix = "") {
   return value === null ? "-" : `${value.toFixed(1)}${suffix}`;
-}
-
-export function SummaryStrip({ summary }: SummaryStripProps) {
-  const inaccuracies = summary.white_inaccuracies + summary.black_inaccuracies;
-  const mistakes = summary.white_mistakes + summary.black_mistakes;
-  const blunders = summary.white_blunders + summary.black_blunders;
-
-  return (
-    <Card className="overflow-hidden">
-      {summary.opening_name && (
-        <div className="border-b border-app-border/70 px-4 py-3 sm:px-5">
-          <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-app-muted">Opening</p>
-          <p className="mt-1 truncate text-sm font-semibold text-app-text">
-            {summary.eco_code && <span className="mr-2 font-mono text-app-accent">{summary.eco_code}</span>}
-            {summary.opening_name}
-          </p>
-        </div>
-      )}
-      <div className="grid grid-cols-2 divide-x divide-y divide-app-border/70 md:grid-cols-6 md:divide-y-0">
-        <StripItem label="White Accuracy" value={fmt(summary.white_accuracy)} accent="text-app-lightSquare" />
-        <StripItem label="Black Accuracy" value={fmt(summary.black_accuracy)} accent="text-app-darkSquare" />
-        <StripItem label={summary.user_username ? "My Accuracy" : "Game Accuracy"} value={fmt(summary.user_username ? summary.user_accuracy : average(summary.white_accuracy, summary.black_accuracy))} accent="text-app-accent" />
-        <StripItem label="Inaccuracies" value={String(summary.user_username ? summary.user_inaccuracies ?? inaccuracies : inaccuracies)} accent="text-app-warning" />
-        <StripItem label="Mistakes" value={String(summary.user_username ? summary.user_mistakes ?? mistakes : mistakes)} accent="text-app-mistake" />
-        <StripItem label="Blunders" value={String(summary.user_username ? summary.user_blunders ?? blunders : blunders)} accent="text-app-blunder" />
-      </div>
-    </Card>
-  );
 }
 
 function average(a: number | null, b: number | null): number | null {
@@ -42,11 +17,66 @@ function average(a: number | null, b: number | null): number | null {
   return values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : null;
 }
 
-function StripItem({ label, value, accent }: { label: string; value: string; accent: string }) {
+function plural(value: number, singular: string) {
+  return `${value} ${singular}${value === 1 ? "" : "s"}`;
+}
+
+export function SummaryStrip({
+  summary,
+  reviewMyMovesOnly = false,
+  onReviewMyMovesOnlyChange,
+  onImportGame,
+}: SummaryStripProps) {
+  const inaccuracies = summary.user_username
+    ? summary.user_inaccuracies ?? summary.white_inaccuracies + summary.black_inaccuracies
+    : summary.white_inaccuracies + summary.black_inaccuracies;
+  const mistakes = summary.user_username
+    ? summary.user_mistakes ?? summary.white_mistakes + summary.black_mistakes
+    : summary.white_mistakes + summary.black_mistakes;
+  const blunders = summary.user_username
+    ? summary.user_blunders ?? summary.white_blunders + summary.black_blunders
+    : summary.white_blunders + summary.black_blunders;
+  const accuracy = summary.user_username
+    ? summary.user_accuracy
+    : average(summary.white_accuracy, summary.black_accuracy);
+  const opening = summary.opening_name
+    ? `${summary.opening_name}${summary.eco_code ? ` (${summary.eco_code})` : ""}`
+    : `${summary.white_player} vs ${summary.black_player}`;
+  const perspective = summary.user_username
+    ? `${summary.user_username} as ${summary.user_color}`
+    : summary.result;
+
   return (
-    <div className="min-w-0 p-4">
-      <p className="truncate text-[11px] font-bold uppercase tracking-[0.12em] text-app-muted">{label}</p>
-      <p className={`mt-2 font-mono text-2xl font-black ${accent}`}>{value}</p>
-    </div>
+    <section className="flex min-h-[68px] flex-col justify-between gap-3 border-b border-app-border bg-app-bg pb-4 pt-1 sm:flex-row sm:items-end">
+      <div className="min-w-0">
+        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+          <h1 className="text-xl font-medium text-app-text">Chess Review</h1>
+          <span className="truncate text-sm text-app-muted">{perspective}</span>
+        </div>
+        <p className="mt-1 truncate text-base font-medium text-app-text">{opening}</p>
+        <p className="mt-1 text-sm text-app-muted">
+          Accuracy {fmt(accuracy, "%")} {"\u2022"} {plural(inaccuracies, "Inaccuracy")} {"\u2022"} {plural(mistakes, "Mistake")} {"\u2022"} {plural(blunders, "Blunder")}
+        </p>
+      </div>
+
+      <div className="flex shrink-0 items-center gap-3">
+        {onReviewMyMovesOnlyChange && summary.user_username && (
+          <label className="flex items-center gap-2 text-sm text-app-muted">
+            <input
+              type="checkbox"
+              className="h-4 w-4 accent-app-accent"
+              checked={reviewMyMovesOnly}
+              onChange={(event) => onReviewMyMovesOnlyChange(event.target.checked)}
+            />
+            My moves
+          </label>
+        )}
+        {onImportGame && (
+          <Button variant="secondary" size="sm" onClick={onImportGame}>
+            Import Game
+          </Button>
+        )}
+      </div>
+    </section>
   );
 }

@@ -27,7 +27,7 @@ input {
 }
 
 ::selection {
-  background: rgba(59, 130, 246, 0.35);
+  background: rgba(0, 0, 0, 0.12);
 }
 
 ::-webkit-scrollbar {
@@ -41,10 +41,18 @@ input {
 
 ::-webkit-scrollbar-thumb {
   background: #263244;
-  border: 3px solid #111827;
-  border-radius: 999px;
+  border: 3px solid #0b1120;
 }
 
 ::-webkit-scrollbar-thumb:hover {
   background: #3b82f6;
+}
+
+.chessboard-animated [data-piece] {
+  will-change: transform;
+}
+
+.chessboard-animated svg {
+  backface-visibility: hidden;
+  transform: translateZ(0);
 }

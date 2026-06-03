@@ -1,12 +1,13 @@
 import type { GameSummary, MoveAnalysis, MoveClassification } from "../types";
 import { Badge } from "./ui/Badge";
-import { Card, CardHeader } from "./ui/Card";
+import { Card } from "./ui/Card";
 
 interface MoveListPanelProps {
   summary: GameSummary;
   currentIndex: number;
   onSelectMove: (index: number) => void;
   reviewMyMovesOnly?: boolean;
+  embedded?: boolean;
 }
 
 const BADGES: Record<MoveClassification, string> = {
@@ -17,10 +18,10 @@ const BADGES: Record<MoveClassification, string> = {
 };
 
 const rowClasses: Record<MoveClassification, string> = {
-  Excellent: "hover:bg-app-panelSecondary/70",
-  Inaccuracy: "bg-app-warning/10 text-yellow-100 hover:bg-app-warning/15",
-  Mistake: "bg-app-mistake/10 text-orange-100 hover:bg-app-mistake/15",
-  Blunder: "bg-app-blunder/12 text-red-100 hover:bg-app-blunder/18",
+  Excellent: "text-slate-300 hover:bg-app-panelSecondary/50",
+  Inaccuracy: "text-app-warning hover:bg-app-warning/10",
+  Mistake: "text-app-mistake hover:bg-app-mistake/10",
+  Blunder: "text-app-blunder hover:bg-app-blunder/10",
 };
 
 const badgeTone: Record<MoveClassification, "neutral" | "green" | "yellow" | "orange" | "red"> = {
@@ -45,10 +46,10 @@ function MoveButton({
 
   return (
     <button
-      className={`flex min-h-9 items-center justify-between gap-2 rounded-md px-3 text-left font-mono text-sm transition ${
+      className={`flex min-h-9 items-center justify-between gap-2 px-3 text-left font-mono text-sm transition ${
         active
-          ? "bg-app-accent text-white shadow-glow"
-          : `text-slate-200 ${rowClasses[move.classification]}`
+          ? "bg-app-accent/20 text-app-text"
+          : rowClasses[move.classification]
       }`}
       onClick={onClick}
     >
@@ -62,7 +63,7 @@ function MoveButton({
   );
 }
 
-export function MoveListPanel({ summary, currentIndex, onSelectMove, reviewMyMovesOnly = false }: MoveListPanelProps) {
+export function MoveListPanel({ summary, currentIndex, onSelectMove, reviewMyMovesOnly = false, embedded = false }: MoveListPanelProps) {
   const pairs: Array<{ moveNumber: number; white?: [MoveAnalysis, number]; black?: [MoveAnalysis, number] }> = [];
   const userColor = reviewMyMovesOnly ? summary.user_color : null;
 
@@ -77,19 +78,19 @@ export function MoveListPanel({ summary, currentIndex, onSelectMove, reviewMyMov
     else pair.black = [move, index];
   });
 
-  return (
-    <Card className="overflow-hidden">
-      <CardHeader title={userColor ? `${userColor} moves` : "Move list"} eyebrow="Notation">
-        Click any move to jump through the review.
-      </CardHeader>
-
-      <div className="px-5 pb-5">
-        <div className="mb-2 grid grid-cols-[42px_1fr_1fr] gap-2 px-1 text-[11px] font-bold uppercase tracking-[0.12em] text-app-muted">
+  const content = (
+    <>
+      <div className="px-5 pb-2 pt-4">
+        <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-app-muted">Notation</p>
+        <h2 className="mt-1 text-base font-medium text-app-text">{userColor ? `${userColor} moves` : "Move list"}</h2>
+      </div>
+      <div className="px-5 pb-4">
+        <div className="mb-2 grid grid-cols-[42px_1fr_1fr] gap-2 border-b border-app-border pb-2 px-1 text-[11px] font-medium uppercase tracking-[0.14em] text-app-muted">
           <div />
           <div>White</div>
           <div>Black</div>
         </div>
-        <div className="max-h-[300px] space-y-1.5 overflow-y-auto pr-1">
+        <div className="max-h-[280px] space-y-1 overflow-y-auto pr-1">
           {pairs.map((pair) => (
             <div key={pair.moveNumber} className="grid grid-cols-[42px_1fr_1fr] items-center gap-2">
               <div className="pr-1 text-right font-mono text-sm text-app-muted">{pair.moveNumber}.</div>
@@ -109,6 +110,14 @@ export function MoveListPanel({ summary, currentIndex, onSelectMove, reviewMyMov
           ))}
         </div>
       </div>
+    </>
+  );
+
+  if (embedded) return <section>{content}</section>;
+
+  return (
+    <Card className="overflow-hidden ring-1 ring-app-border/70">
+      {content}
     </Card>
   );
 }

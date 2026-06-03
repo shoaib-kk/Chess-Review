@@ -58,4 +58,27 @@ cd frontend
 npm run dev
 ```
 
-Open http://127.0.0.1:5173.
+Open the frontend URL printed by Vite. If another Vite app is already using port 5173, Vite may choose the next available port.
+
+## Running With Docker
+
+Build and run both services:
+
+```bash
+docker compose up --build
+```
+
+Open http://localhost:8080.
+
+The Docker setup runs:
+
+- `backend`: FastAPI on port 8001 inside the Docker network, with Stockfish installed from the Debian package.
+- `frontend`: nginx serving the built React app on host port 8080.
+
+The frontend calls `/api`, and nginx proxies those requests to the backend container. This keeps the browser-facing app on one origin and avoids hard-coded local API URLs.
+
+Stop the stack:
+
+```bash
+docker compose down
+```

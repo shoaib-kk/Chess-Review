@@ -7,17 +7,17 @@ interface BadgeProps {
 }
 
 const toneClasses = {
-  neutral: "bg-app-panelSecondary text-app-muted",
-  blue: "bg-blue-500/15 text-blue-300",
-  green: "bg-app-good/15 text-green-300",
-  yellow: "bg-app-warning/15 text-yellow-300",
-  orange: "bg-app-mistake/15 text-orange-300",
-  red: "bg-app-blunder/15 text-red-300",
+  neutral: "text-app-muted",
+  blue: "text-blue-300",
+  green: "text-app-good",
+  yellow: "text-app-warning",
+  orange: "text-app-mistake",
+  red: "text-app-blunder",
 };
 
 export function Badge({ children, tone = "neutral", className = "" }: BadgeProps) {
   return (
-    <span className={`inline-flex items-center rounded px-2 py-1 text-xs font-bold ${toneClasses[tone]} ${className}`}>
+    <span className={`inline-flex items-center text-xs font-medium ${toneClasses[tone]} ${className}`}>
       {children}
     </span>
   );

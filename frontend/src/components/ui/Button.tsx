@@ -11,7 +11,7 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 
 const variantClasses: Record<ButtonVariant, string> = {
   primary:
-    "bg-app-accent text-white shadow-glow hover:bg-blue-500 disabled:bg-app-panelSecondary disabled:text-app-muted disabled:shadow-none",
+    "bg-app-accent text-white hover:bg-blue-500 disabled:bg-app-panelSecondary disabled:text-app-muted",
   secondary:
     "bg-app-panelSecondary text-app-text hover:bg-slate-700 disabled:text-app-muted disabled:bg-app-panelSecondary/60",
   ghost:
@@ -35,7 +35,7 @@ export function Button({
 }: ButtonProps) {
   return (
     <button
-      className={`inline-flex items-center justify-center rounded-md font-semibold transition duration-150 focus:outline-none focus:ring-2 focus:ring-app-accent/50 disabled:cursor-not-allowed ${variantClasses[variant]} ${sizeClasses[size]} ${className}`}
+      className={`inline-flex items-center justify-center rounded-md font-medium transition duration-150 focus:outline-none focus:ring-2 focus:ring-app-accent/50 disabled:cursor-not-allowed ${variantClasses[variant]} ${sizeClasses[size]} ${className}`}
       {...props}
     >
       {children}

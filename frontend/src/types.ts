@@ -11,6 +11,7 @@ export interface MoveAnalysis {
   eval_white_pov: number | null;
   best_move: string | null;
   cp_loss: number | null;
+  move_accuracy: number | null;
   classification: MoveClassification;
   pv: string[];
   fen_before: string;

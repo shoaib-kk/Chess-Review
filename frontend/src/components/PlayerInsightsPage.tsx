@@ -14,31 +14,53 @@ import {
   YAxis,
   Cell,
 } from "recharts";
-import type { OpeningInsight, PlayerInsights } from "../types";
+import type { OpeningInsight, PlayerInsights, TimeClassFilter } from "../types";
 import { Button } from "./ui/Button";
 import { Card, CardHeader } from "./ui/Card";
 import { Badge } from "./ui/Badge";
 
 interface PlayerInsightsPageProps {
   loading: boolean;
+  username: string;
+  onUsernameChange: (username: string) => void;
+  limit: number;
+  onLimitChange: (limit: number) => void;
+  timeClass: TimeClassFilter;
+  onTimeClassChange: (timeClass: TimeClassFilter) => void;
+  ratedOnly: boolean;
+  onRatedOnlyChange: (ratedOnly: boolean) => void;
   onFetchInsights: (
     username: string,
-    params: { limit: number; time_class: "rapid" | "blitz" | "bullet" | ""; rated_only: boolean },
+    params: { limit: number; time_class: TimeClassFilter; rated_only: boolean },
   ) => Promise<PlayerInsights | null>;
-  initialUsername?: string | null;
 }
 
-const PIE_COLORS = ["#3b82f6", "#ef4444", "#f97316", "#eab308", "#22c55e", "#8b5cf6", "#14b8a6", "#f43f5e"];
+const PIE_COLORS = ["#1a1a1a", "#3f3f3f", "#5f5f5f", "#7a7a7a", "#9b9b9b", "#b8b8b8", "#d0d0d0", "#e0e0e0"];
+const CHART_GRID = "rgba(0,0,0,0.1)";
+const CHART_TEXT = "#6b6b6b";
+const CHART_STROKE = "#1a1a1a";
+const TOOLTIP_STYLE = { background: "#ffffff", border: "0.5px solid rgba(0,0,0,0.1)", borderRadius: 0, color: "#1a1a1a" };
 
 function fmt(value: number | null | undefined, suffix = "") {
   return value === null || value === undefined ? "-" : `${value.toFixed(1)}${suffix}`;
 }
 
-export function PlayerInsightsPage({ loading, onFetchInsights, initialUsername }: PlayerInsightsPageProps) {
-  const [username, setUsername] = useState(initialUsername ?? "");
-  const [limit, setLimit] = useState(200);
-  const [timeClass, setTimeClass] = useState<"rapid" | "blitz" | "bullet" | "">("");
-  const [ratedOnly, setRatedOnly] = useState(false);
+function shortLabel(value: string) {
+  return value.length > 22 ? `${value.slice(0, 22)}...` : value;
+}
+
+export function PlayerInsightsPage({
+  loading,
+  username,
+  onUsernameChange,
+  limit,
+  onLimitChange,
+  timeClass,
+  onTimeClassChange,
+  ratedOnly,
+  onRatedOnlyChange,
+  onFetchInsights,
+}: PlayerInsightsPageProps) {
   const [insights, setInsights] = useState<PlayerInsights | null>(null);
   const [activeTab, setActiveTab] = useState<"openings" | "trends" | "mistakes" | "profile">("openings");
 
@@ -56,31 +78,31 @@ export function PlayerInsightsPage({ loading, onFetchInsights, initialUsername }
         </CardHeader>
         <div className="grid gap-3 px-5 pb-5 lg:grid-cols-[1fr_120px_150px_auto_auto] lg:items-center">
           <input
-            className="h-11 rounded-md bg-slate-950/80 px-3 text-app-text outline-none ring-1 ring-app-border transition placeholder:text-slate-600 focus:ring-2 focus:ring-app-accent/70"
+            className="h-11 border-[0.5px] border-app-border bg-app-panel px-3 text-app-text outline-none transition placeholder:text-[#9b9b9b] focus:border-app-text"
             value={username}
             placeholder="Chess.com username"
-            onChange={(event) => setUsername(event.target.value)}
+            onChange={(event) => onUsernameChange(event.target.value)}
           />
           <input
-            className="h-11 rounded-md bg-slate-950/80 px-3 text-app-text outline-none ring-1 ring-app-border focus:ring-2 focus:ring-app-accent/70"
+            className="h-11 border-[0.5px] border-app-border bg-app-panel px-3 text-app-text outline-none focus:border-app-text"
             type="number"
             min={20}
             max={300}
             value={limit}
-            onChange={(event) => setLimit(Number(event.target.value))}
+            onChange={(event) => onLimitChange(Number(event.target.value))}
           />
           <select
-            className="h-11 rounded-md bg-slate-950/80 px-3 text-app-text outline-none ring-1 ring-app-border focus:ring-2 focus:ring-app-accent/70"
+            className="h-11 border-[0.5px] border-app-border bg-app-panel px-3 text-app-text outline-none focus:border-app-text"
             value={timeClass}
-            onChange={(event) => setTimeClass(event.target.value as "rapid" | "blitz" | "bullet" | "")}
+            onChange={(event) => onTimeClassChange(event.target.value as TimeClassFilter)}
           >
             <option value="">All time controls</option>
             <option value="rapid">Rapid</option>
             <option value="blitz">Blitz</option>
             <option value="bullet">Bullet</option>
           </select>
-          <label className="flex h-11 items-center gap-2 rounded-md bg-slate-950/80 px-3 text-sm text-app-muted ring-1 ring-app-border">
-            <input type="checkbox" className="accent-app-accent" checked={ratedOnly} onChange={(event) => setRatedOnly(event.target.checked)} />
+          <label className="flex h-11 items-center gap-2 border-[0.5px] border-app-border bg-app-panel px-3 text-sm text-app-muted">
+            <input type="checkbox" className="accent-app-accent" checked={ratedOnly} onChange={(event) => onRatedOnlyChange(event.target.checked)} />
             Rated only
           </label>
           <Button variant="primary" disabled={!username.trim() || loading} onClick={fetchInsights}>
@@ -91,12 +113,14 @@ export function PlayerInsightsPage({ loading, onFetchInsights, initialUsername }
 
       {insights && (
         <>
-          <section className="grid gap-3 md:grid-cols-4">
-            <SummaryCard label="Games Analyzed" value={String(insights.summary.games_analyzed)} />
-            <SummaryCard label="Win Rate" value={fmt(insights.summary.win_rate, "%")} />
-            <SummaryCard label="Average Accuracy" value={fmt(insights.summary.average_accuracy)} />
-            <SummaryCard label="Average CP Loss" value={fmt(insights.summary.average_cp_loss, " cp")} />
-          </section>
+          <SummaryRow
+            items={[
+              { label: "Games Analyzed", value: String(insights.summary.games_analyzed) },
+              { label: "Win Rate", value: fmt(insights.summary.win_rate, "%") },
+              { label: "Average Accuracy", value: fmt(insights.summary.average_accuracy) },
+              { label: "Average CP Loss", value: fmt(insights.summary.average_cp_loss, " cp") },
+            ]}
+          />
 
           <div className="flex flex-wrap gap-2">
             {(["openings", "trends", "mistakes", "profile"] as const).map((tab) => (
@@ -119,14 +143,29 @@ export function PlayerInsightsPage({ loading, onFetchInsights, initialUsername }
 function SummaryCard({ label, value }: { label: string; value: string }) {
   return (
     <Card className="p-4">
-      <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-app-muted">{label}</p>
-      <p className="mt-2 font-mono text-2xl font-black text-app-text">{value}</p>
+      <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-app-muted">{label}</p>
+      <p className="mt-2 font-mono text-2xl font-medium text-app-text">{value}</p>
+    </Card>
+  );
+}
+
+function SummaryRow({ items }: { items: Array<{ label: string; value: string }> }) {
+  return (
+    <Card className="overflow-hidden">
+      <div className="grid divide-y divide-app-border/70 md:grid-cols-4 md:divide-x md:divide-y-0">
+        {items.map((item) => (
+          <div key={item.label} className="min-w-0 p-4">
+            <p className="truncate text-[11px] font-medium uppercase tracking-[0.18em] text-app-muted">{item.label}</p>
+            <p className="mt-2 truncate font-mono text-2xl font-medium text-app-text">{item.value}</p>
+          </div>
+        ))}
+      </div>
     </Card>
   );
 }
 
 function OpeningsTab({ insights }: { insights: PlayerInsights }) {
-  const combined = [...insights.openings.as_white, ...insights.openings.as_black].slice(0, 10);
+  const combined = [...insights.openings.as_white, ...insights.openings.as_black];
   return (
     <div className="grid gap-5 xl:grid-cols-3">
       <ChartCard title="Most common openings">
@@ -140,26 +179,34 @@ function OpeningsTab({ insights }: { insights: PlayerInsights }) {
       </ChartCard>
       <OpeningTable title="As White" rows={insights.openings.as_white} />
       <OpeningTable title="As Black" rows={insights.openings.as_black} />
-      <Card className="p-5">
-        <h3 className="text-base font-semibold">Black responses</h3>
-        <div className="mt-4 grid gap-4 sm:grid-cols-2">
-          <ResponseList title="vs e4" rows={insights.openings.responses_to_e4} />
-          <ResponseList title="vs d4" rows={insights.openings.responses_to_d4} />
-        </div>
-      </Card>
     </div>
   );
 }
 
 function OpeningBar({ data, dataKey }: { data: OpeningInsight[]; dataKey: keyof OpeningInsight }) {
+  const sortedData =
+    dataKey === "win_rate"
+      ? [...data].sort((a, b) => b.win_rate - a.win_rate)
+      : data;
+  const chartData = sortedData.slice(0, 10).map((row) => ({ ...row, label: shortLabel(row.opening_name) }));
+  const height = Math.max(260, chartData.length * 34 + 44);
+
   return (
-    <ResponsiveContainer width="100%" height={260}>
-      <BarChart data={data} margin={{ left: -20, right: 8, top: 8, bottom: 40 }}>
-        <CartesianGrid stroke="#263244" strokeDasharray="3 6" vertical={false} />
-        <XAxis dataKey="opening_name" tick={{ fill: "#94a3b8", fontSize: 10 }} angle={-25} textAnchor="end" interval={0} height={68} />
-        <YAxis tick={{ fill: "#94a3b8", fontSize: 11 }} axisLine={false} tickLine={false} />
-        <Tooltip contentStyle={{ background: "#111827", border: "1px solid #263244", borderRadius: 8 }} />
-        <Bar dataKey={dataKey as string} fill="#3b82f6" radius={[5, 5, 0, 0]} />
+    <ResponsiveContainer width="100%" height={height}>
+      <BarChart data={chartData} layout="vertical" margin={{ left: 12, right: 18, top: 8, bottom: 8 }}>
+        <CartesianGrid stroke={CHART_GRID} horizontal={false} />
+        <XAxis type="number" tick={{ fill: CHART_TEXT, fontSize: 11 }} axisLine={false} tickLine={false} />
+        <YAxis
+          type="category"
+          dataKey="label"
+          width={138}
+          tick={{ fill: CHART_TEXT, fontSize: 10 }}
+          axisLine={false}
+          tickLine={false}
+          interval={0}
+        />
+        <Tooltip contentStyle={TOOLTIP_STYLE} />
+        <Bar dataKey={dataKey as string} fill={CHART_STROKE} barSize={18} />
       </BarChart>
     </ResponsiveContainer>
   );
@@ -169,19 +216,19 @@ function TrendsTab({ insights }: { insights: PlayerInsights }) {
   return (
     <div className="grid gap-5 xl:grid-cols-2">
       <ChartCard title="Accuracy over time">
-        <TrendLine data={insights.performance.trend_points} dataKey="accuracy" stroke="#22c55e" />
+        <TrendLine data={insights.performance.trend_points} dataKey="accuracy" stroke={CHART_STROKE} />
       </ChartCard>
       <ChartCard title="Average CP loss over time">
-        <TrendLine data={insights.performance.trend_points} dataKey="cp_loss" stroke="#f97316" />
+        <TrendLine data={insights.performance.trend_points} dataKey="cp_loss" stroke="#5f5f5f" />
       </ChartCard>
       <ChartCard title="Blunders over time">
-        <TrendLine data={insights.performance.trend_points} dataKey="blunders" stroke="#ef4444" />
+        <TrendLine data={insights.performance.trend_points} dataKey="blunders" stroke="#7a7a7a" />
       </ChartCard>
       <ChartCard title="Rating over time">
-        <TrendLine data={insights.performance.rating_points} dataKey="rating" stroke="#3b82f6" />
+        <TrendLine data={insights.performance.rating_points} dataKey="rating" stroke="#3f3f3f" />
       </ChartCard>
       <Card className="p-5 xl:col-span-2">
-        <h3 className="text-base font-semibold">Trend notes</h3>
+        <h3 className="text-base font-medium">Trend notes</h3>
         <div className="mt-3 flex flex-wrap gap-2">
           {insights.performance.trend_notes.map((note) => <Badge key={note} tone="blue">{note}</Badge>)}
         </div>
@@ -194,10 +241,10 @@ function TrendLine({ data, dataKey, stroke }: { data: Array<Record<string, unkno
   return (
     <ResponsiveContainer width="100%" height={260}>
       <LineChart data={data} margin={{ left: -20, right: 8, top: 8, bottom: 8 }}>
-        <CartesianGrid stroke="#263244" strokeDasharray="3 6" vertical={false} />
-        <XAxis dataKey="date" tick={{ fill: "#94a3b8", fontSize: 10 }} minTickGap={24} />
-        <YAxis tick={{ fill: "#94a3b8", fontSize: 11 }} axisLine={false} tickLine={false} />
-        <Tooltip contentStyle={{ background: "#111827", border: "1px solid #263244", borderRadius: 8 }} />
+        <CartesianGrid stroke={CHART_GRID} vertical={false} />
+        <XAxis dataKey="date" tick={{ fill: CHART_TEXT, fontSize: 10 }} minTickGap={48} interval="preserveStartEnd" />
+        <YAxis tick={{ fill: CHART_TEXT, fontSize: 11 }} axisLine={false} tickLine={false} />
+        <Tooltip contentStyle={TOOLTIP_STYLE} />
         <Line type="monotone" dataKey={dataKey} stroke={stroke} strokeWidth={2} dot={false} />
       </LineChart>
     </ResponsiveContainer>
@@ -213,17 +260,17 @@ function MistakesTab({ insights }: { insights: PlayerInsights }) {
             <Pie data={insights.mistakes.categories} dataKey="count" nameKey="category" innerRadius={70} outerRadius={115} paddingAngle={3}>
               {insights.mistakes.categories.map((_, index) => <Cell key={index} fill={PIE_COLORS[index % PIE_COLORS.length]} />)}
             </Pie>
-            <Tooltip contentStyle={{ background: "#111827", border: "1px solid #263244", borderRadius: 8 }} />
+            <Tooltip contentStyle={TOOLTIP_STYLE} />
           </PieChart>
         </ResponsiveContainer>
       </ChartCard>
       <Card className="p-5">
-        <h3 className="text-base font-semibold">Recurring weaknesses</h3>
+        <h3 className="text-base font-medium">Recurring weaknesses</h3>
         <div className="mt-4 grid gap-3">
           {insights.mistakes.top_weaknesses.map((item, index) => (
-            <div key={item.category} className="rounded-md bg-slate-950/70 p-4 ring-1 ring-app-border">
+            <div key={item.category} className="border-b-[0.5px] border-app-border py-3">
               <div className="flex items-center justify-between">
-                <span className="font-semibold">{index + 1}. {item.category}</span>
+                <span className="font-medium">{index + 1}. {item.category}</span>
                 <Badge tone="red">{`${item.percentage}%`}</Badge>
               </div>
               <p className="mt-1 text-sm text-app-muted">{item.count} signals across the sample.</p>
@@ -239,8 +286,8 @@ function ProfileTab({ insights }: { insights: PlayerInsights }) {
   return (
     <div className="grid gap-5 lg:grid-cols-2">
       <Card className="p-5 lg:col-span-2">
-        <h3 className="text-base font-semibold">Playstyle summary</h3>
-        <p className="mt-3 text-sm leading-6 text-slate-300">{insights.profile.summary}</p>
+        <h3 className="text-base font-medium">Playstyle summary</h3>
+        <p className="mt-3 text-sm leading-6 text-app-muted">{insights.profile.summary}</p>
         <div className="mt-4 flex flex-wrap gap-2">
           <Badge tone="blue">{insights.profile.style}</Badge>
           <Badge tone="neutral">{`${insights.profile.position_preference} positions`}</Badge>
@@ -256,25 +303,27 @@ function ProfileTab({ insights }: { insights: PlayerInsights }) {
 
 function ChartCard({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <Card className="p-5">
-      <h3 className="mb-4 text-base font-semibold">{title}</h3>
+    <Card className="p-5 pb-7">
+      <h3 className="mb-4 text-base font-medium">{title}</h3>
       {children}
     </Card>
   );
 }
 
 function OpeningTable({ title, rows }: { title: string; rows: OpeningInsight[] }) {
+  const sortedRows = [...rows].sort((a, b) => b.win_rate - a.win_rate);
+
   return (
     <Card className="p-5">
-      <h3 className="text-base font-semibold">{title}</h3>
+      <h3 className="text-base font-medium">{title}</h3>
       <div className="mt-4 grid gap-2">
-        {rows.slice(0, 8).map((row) => (
-          <div key={`${row.eco}-${row.opening_name}`} className="grid grid-cols-[1fr_auto] gap-3 rounded-md bg-slate-950/70 p-3 ring-1 ring-app-border">
+        {sortedRows.slice(0, 8).map((row) => (
+          <div key={`${row.eco}-${row.opening_name}`} className="grid grid-cols-[1fr_auto] gap-3 border-b-[0.5px] border-app-border py-3">
             <div className="min-w-0">
-              <p className="truncate text-sm font-semibold">{row.opening_name}</p>
+              <p className="truncate text-sm font-medium">{row.opening_name}</p>
               <p className="text-xs text-app-muted">{row.eco} · {row.games} games · {row.frequency}%</p>
             </div>
-            <div className="text-right font-mono text-sm text-app-text">{row.win_rate}%</div>
+            <div className="min-w-0 overflow-hidden whitespace-nowrap text-right font-mono text-sm text-app-text">{row.win_rate}%</div>
           </div>
         ))}
       </div>
@@ -285,10 +334,10 @@ function OpeningTable({ title, rows }: { title: string; rows: OpeningInsight[] }
 function ResponseList({ title, rows }: { title: string; rows: Array<{ move: string; games: number; frequency: number }> }) {
   return (
     <div>
-      <p className="text-xs font-bold uppercase tracking-[0.12em] text-app-muted">{title}</p>
+      <p className="text-xs font-medium uppercase tracking-[0.18em] text-app-muted">{title}</p>
       <div className="mt-2 grid gap-2">
         {rows.map((row) => (
-          <div key={row.move} className="flex items-center justify-between rounded bg-slate-950/70 px-3 py-2 text-sm">
+          <div key={row.move} className="flex items-center justify-between border-b-[0.5px] border-app-border py-2 text-sm">
             <span className="font-mono">{row.move}</span>
             <span className="text-app-muted">{row.games} · {row.frequency}%</span>
           </div>
@@ -301,10 +350,10 @@ function ResponseList({ title, rows }: { title: string; rows: Array<{ move: stri
 function ListCard({ title, rows, tone, wide = false }: { title: string; rows: string[]; tone: "green" | "red" | "blue"; wide?: boolean }) {
   return (
     <Card className={`p-5 ${wide ? "lg:col-span-2" : ""}`}>
-      <h3 className="text-base font-semibold">{title}</h3>
+      <h3 className="text-base font-medium">{title}</h3>
       <div className="mt-4 grid gap-3">
         {rows.map((row) => (
-          <div key={row} className="flex gap-3 rounded-md bg-slate-950/70 p-3 text-sm text-slate-300 ring-1 ring-app-border">
+          <div key={row} className="flex gap-3 border-b-[0.5px] border-app-border py-3 text-sm text-app-muted">
             <Badge tone={tone}>{title.slice(0, 1)}</Badge>
             <span>{row}</span>
           </div>

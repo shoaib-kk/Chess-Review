@@ -23,10 +23,6 @@ export default {
       fontFamily: {
         sans: ["Inter", "ui-sans-serif", "system-ui", "sans-serif"],
       },
-      boxShadow: {
-        panel: "0 18px 50px rgba(0, 0, 0, 0.24)",
-        glow: "0 0 0 1px rgba(59, 130, 246, 0.18), 0 18px 45px rgba(0, 0, 0, 0.25)",
-      },
     },
   },
   plugins: [],

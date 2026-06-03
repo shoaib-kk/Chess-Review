@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-import math
-
 import chess
+
+from .services.accuracy import move_accuracy, phase_weight, weighted_average
 
 
 def _enum_value(value):
@@ -34,15 +34,6 @@ def _move_derivatives(fen: str, played_san: str, best_san: str | None) -> dict:
         "played_move_uci": played_move_uci,
         "best_move_uci": best_move_uci,
     }
-
-
-def _move_accuracy(cp_loss: float | None) -> float | None:
-    if cp_loss is None:
-        return None
-    if cp_loss <= 0:
-        return 100.0
-    accuracy = 103.1668 * math.exp(-0.04354 * cp_loss) - 3.1669
-    return max(0.0, min(100.0, accuracy))
 
 
 def _average(values: list[float]) -> float | None:
@@ -86,24 +77,25 @@ def serialize_game_summary(summary, username: str | None = None) -> dict:
     moves = []
     user_color = _user_color(summary, username)
     user_inaccuracies, user_mistakes, user_blunders = _classification_counts(summary, user_color)
-    white_accuracies: list[float] = []
-    black_accuracies: list[float] = []
+    white_accuracies: list[tuple[float, float]] = []
+    black_accuracies: list[tuple[float, float]] = []
     white_cp_losses: list[float] = []
     black_cp_losses: list[float] = []
 
-    for move in summary.move_analyses:
+    for ply_index, move in enumerate(summary.move_analyses, start=1):
         classification = _enum_value(move.classification)
         derived = _move_derivatives(move.fen_before, move.move_played, move.best_move)
-        accuracy = _move_accuracy(move.cp_loss)
+        accuracy = move_accuracy(move.eval_before, move.eval_after, move.cp_loss)
+        weight = phase_weight(ply_index, summary.total_moves)
 
         if move.color == "White":
             if accuracy is not None:
-                white_accuracies.append(accuracy)
+                white_accuracies.append((accuracy, weight))
             if move.cp_loss is not None:
                 white_cp_losses.append(move.cp_loss)
         else:
             if accuracy is not None:
-                black_accuracies.append(accuracy)
+                black_accuracies.append((accuracy, weight))
             if move.cp_loss is not None:
                 black_cp_losses.append(move.cp_loss)
 
@@ -117,6 +109,7 @@ def serialize_game_summary(summary, username: str | None = None) -> dict:
                 "eval_white_pov": move.eval_white_pov,
                 "best_move": move.best_move,
                 "cp_loss": move.cp_loss,
+                "move_accuracy": round(accuracy, 1) if accuracy is not None else None,
                 "classification": classification,
                 "pv": move.pv,
                 "fen_before": move.fen_before,
@@ -149,9 +142,9 @@ def serialize_game_summary(summary, username: str | None = None) -> dict:
         "black_inaccuracies": summary.black_inaccuracies,
         "black_mistakes": summary.black_mistakes,
         "black_blunders": summary.black_blunders,
-        "white_accuracy": _average(white_accuracies),
-        "black_accuracy": _average(black_accuracies),
-        "user_accuracy": _average(user_accuracies),
+        "white_accuracy": weighted_average(white_accuracies),
+        "black_accuracy": weighted_average(black_accuracies),
+        "user_accuracy": weighted_average(user_accuracies),
         "average_cp_loss_white": _average(white_cp_losses),
         "average_cp_loss_black": _average(black_cp_losses),
         "average_cp_loss_user": _average(user_cp_losses),

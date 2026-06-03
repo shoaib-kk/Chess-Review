@@ -19,6 +19,7 @@ class MoveAnalysisResponse(BaseModel):
     eval_white_pov: Optional[float]
     best_move: Optional[str]
     cp_loss: Optional[float]
+    move_accuracy: Optional[float] = None
     classification: str
     pv: list[str]
     fen_before: str

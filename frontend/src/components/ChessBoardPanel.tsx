@@ -2,7 +2,7 @@ import { Chessboard } from "react-chessboard";
 import type { GameSummary, MoveAnalysis } from "../types";
 import { ClassificationBadge } from "./ui/Badge";
 import { Button } from "./ui/Button";
-import { Card, CardHeader } from "./ui/Card";
+import { Card } from "./ui/Card";
 
 interface ChessboardPanelProps {
   summary: GameSummary;
@@ -64,33 +64,38 @@ export function ChessboardPanel({
         [highlightedSquare]: {
           background:
             move?.classification === "Blunder"
-              ? "radial-gradient(circle, rgba(239,68,68,0.72) 0%, rgba(239,68,68,0.26) 72%)"
+              ? "radial-gradient(circle, rgba(239,68,68,0.68) 0%, rgba(239,68,68,0.22) 72%)"
               : move?.classification === "Mistake"
-                ? "radial-gradient(circle, rgba(249,115,22,0.72) 0%, rgba(249,115,22,0.24) 72%)"
-                : "radial-gradient(circle, rgba(234,179,8,0.72) 0%, rgba(234,179,8,0.22) 72%)",
+                ? "radial-gradient(circle, rgba(249,115,22,0.68) 0%, rgba(249,115,22,0.22) 72%)"
+                : "radial-gradient(circle, rgba(234,179,8,0.68) 0%, rgba(234,179,8,0.2) 72%)",
         },
       }
     : {};
 
   return (
-    <Card className="overflow-hidden">
-      <CardHeader
-        title="Board"
-        eyebrow="Position"
-        action={<Button variant="ghost" size="sm" onClick={onFlip}>Flip board</Button>}
-      >
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="font-mono text-sm text-app-text">{moveLabel(move)}</span>
-          {move && <ClassificationBadge classification={move.classification} />}
+    <Card className="overflow-hidden ring-1 ring-app-border/70">
+      <div className="flex flex-col gap-3 border-b border-app-border/70 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
+          <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-app-muted">Position</p>
+          <div className="mt-1 flex flex-wrap items-center gap-3">
+            <span className="font-mono text-2xl font-medium text-app-text">{moveLabel(move)}</span>
+            {move && <ClassificationBadge classification={move.classification} />}
+          </div>
         </div>
-      </CardHeader>
+        <Button variant="ghost" size="sm" onClick={onFlip}>Flip board</Button>
+      </div>
 
-      <div className="px-4 pb-5 sm:px-5">
-        <div className="mx-auto max-w-[560px] rounded-lg bg-slate-950/55 p-3 shadow-inner ring-1 ring-app-border">
+      <div className="px-4 pb-5 pt-5 sm:px-5">
+        <div className="chessboard-animated mx-auto max-w-[680px]">
           <Chessboard
+            id={1}
             position={position}
+            animationDuration={220}
             boardOrientation={flipped ? "black" : "white"}
             arePiecesDraggable={false}
+            customBoardStyle={{
+              overflow: "hidden",
+            }}
             customDarkSquareStyle={{ backgroundColor: "#b58863" }}
             customLightSquareStyle={{ backgroundColor: "#f0d9b5" }}
             customArrows={arrows as never}
@@ -110,7 +115,7 @@ export function ChessboardPanel({
           >
             Prev
           </Button>
-          <div className="grid h-9 place-items-center rounded-md bg-slate-950/70 px-2 font-mono text-xs text-app-muted ring-1 ring-app-border">
+          <div className="grid h-9 place-items-center bg-app-panelSecondary px-2 font-mono text-xs text-app-muted">
             {moveIndex + 1}/{summary.total_moves}
           </div>
           <Button
