@@ -11,6 +11,7 @@ import chess
 import chess.pgn
 
 from .chesscom_client import get_recent_games
+from .opening_names import extract_opening_family, extract_variation
 
 DRAW_RESULTS = {
     "agreed",
@@ -187,13 +188,24 @@ def _opening_rows(groups: dict[str, dict], total_games: int) -> list[dict[str, A
     for key, data in groups.items():
         rows.append(
             {
-                "opening_name": data["opening_name"],
+                "opening_name": data["opening_family"],
+                "opening_family": data["opening_family"],
+                "variation": None,
                 "eco": data["eco"],
                 "games": data["games"],
                 "frequency": _pct(data["games"], total_games),
                 "win_rate": _pct(data["score"], data["games"]),
                 "avg_accuracy": _safe_mean(data["accuracies"]),
                 "avg_cp_loss": _safe_mean(data["cp_losses"]),
+                "variations": [
+                    {
+                        "variation": variation,
+                        "games": count,
+                        "frequency": _pct(count, data["games"]),
+                        "eco": data["variation_ecos"].get(variation, data["eco"]),
+                    }
+                    for variation, count in data["variations"].most_common()
+                ],
             }
         )
     return sorted(rows, key=lambda row: (-row["games"], row["opening_name"]))[:12]
@@ -299,6 +311,8 @@ def get_player_insights(username: str, limit: int = 200, time_class: str | None 
         moves = _mainline(pgn_game)
         ply_count = len(moves)
         opening_name, eco = _opening_info(pgn_game)
+        opening_family = extract_opening_family(opening_name)
+        variation = extract_variation(opening_name)
         player_result = raw["white_result"] if color == "White" else raw["black_result"]
         score = _score_for_result(player_result)
         rating = _rating(pgn_game, color)
@@ -319,24 +333,32 @@ def get_player_insights(username: str, limit: int = 200, time_class: str | None 
             "blunder_proxy": 1 if score == 0 and ply_count <= 45 else 0,
             "captures_checks": captures_checks,
             "opening": opening_name,
+            "opening_family": opening_family,
+            "variation": variation,
         }
         records.append(record)
 
-        group_key = f"{eco}:{opening_name}"
+        group_key = opening_family
         target = white_groups if color == "White" else black_groups
         if group_key not in target:
             target[group_key] = {
                 "opening_name": opening_name,
+                "opening_family": opening_family,
                 "eco": eco,
                 "games": 0,
                 "score": 0.0,
                 "accuracies": [],
                 "cp_losses": [],
+                "variations": Counter(),
+                "variation_ecos": {},
             }
         target[group_key]["games"] += 1
         target[group_key]["score"] += score
         target[group_key]["accuracies"].append(accuracy)
         target[group_key]["cp_losses"].append(cp_loss)
+        variation_key = variation or "Main line / Other"
+        target[group_key]["variations"][variation_key] += 1
+        target[group_key]["variation_ecos"].setdefault(variation_key, eco)
 
         first, response = _response_bucket(pgn_game)
         if color == "Black" and first == "e4" and response:

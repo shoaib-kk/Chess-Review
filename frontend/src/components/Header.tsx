@@ -1,4 +1,5 @@
 import { Button } from "./ui/Button";
+import { ApiStatusIndicator } from "./ApiStatusIndicator";
 
 interface HeaderProps {
   apiStatus: "checking" | "ok" | "down";
@@ -10,23 +11,23 @@ interface HeaderProps {
 }
 
 const navItems = [
-  { mode: "chesscom", label: "Import Game" },
-  { mode: "pgn", label: "Paste PGN" },
-  { mode: "insights", label: "Player Insights" },
-  { mode: "repertoire", label: "Opening Repertoire" },
+  { mode: "chesscom", label: "Import Game", icon: "+" },
+  { mode: "pgn", label: "Paste PGN", icon: "P" },
+  { mode: "insights", label: "Player Insights", icon: "I" },
+  { mode: "repertoire", label: "Repertoire", icon: "R" },
 ] as const;
 
 export function Header({ apiStatus, activeMode, onModeChange, username, onLogout, onNewReview }: HeaderProps) {
   return (
-    <aside className="border-b-[0.5px] border-app-border bg-app-bg lg:fixed lg:inset-y-0 lg:left-0 lg:z-20 lg:w-72 lg:border-b-0 lg:border-r-[0.5px]">
-      <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-4 lg:h-full lg:px-5 lg:py-5">
+    <aside className="border-b-[0.5px] border-app-border bg-app-bg lg:fixed lg:inset-y-0 lg:left-0 lg:z-20 lg:w-60 lg:border-b-0 lg:border-r-[0.5px]">
+      <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-4 lg:h-full lg:px-4 lg:py-4">
         <div className="flex min-w-0 items-center gap-3">
-          <div className="grid h-10 w-10 shrink-0 place-items-center border-[0.5px] border-app-border text-sm font-medium text-app-text">
+          <div className="grid h-8 w-8 shrink-0 place-items-center border-[0.5px] border-app-border text-xs font-medium text-app-text">
             CR
           </div>
           <div className="min-w-0">
-            <h1 className="text-xl font-medium tracking-normal text-app-text">Chess Review</h1>
-            <p className="truncate text-sm text-app-muted">Analyze your games with Stockfish</p>
+            <h1 className="text-base font-medium tracking-normal text-app-text">Chess Review</h1>
+            <p className="truncate text-xs text-app-muted">Analysis workspace</p>
           </div>
         </div>
 
@@ -35,23 +36,24 @@ export function Header({ apiStatus, activeMode, onModeChange, username, onLogout
           <p className="mt-1 truncate font-mono text-sm font-medium text-app-text">{username}</p>
         </div>
 
-        <div className="flex flex-wrap gap-2 lg:grid">
+        <div className="flex flex-wrap gap-1 lg:grid">
           {navItems.map((item) => (
-            <Button
+            <button
               key={item.mode}
-              variant={activeMode === item.mode ? "primary" : "secondary"}
-              size="md"
-              className="justify-start lg:w-full"
+              className={`grid h-9 grid-cols-[22px_1fr] items-center gap-2 px-2 text-left text-sm font-medium transition hover:bg-app-panelSecondary lg:w-full ${
+                activeMode === item.mode ? "bg-app-panelSecondary text-app-text" : "text-app-muted"
+              }`}
               onClick={() => onModeChange(item.mode)}
             >
-              {item.label}
-            </Button>
+              <span className="grid h-5 w-5 place-items-center font-mono text-xs">{item.icon}</span>
+              <span className="truncate">{item.label}</span>
+            </button>
           ))}
         </div>
 
         <div className="flex flex-wrap items-center gap-2 lg:mt-auto lg:grid">
-          <div className="flex h-9 items-center px-1" title={`API ${apiStatus}`}>
-            <span className="h-2.5 w-2.5 bg-app-text" />
+          <div className="flex h-9 items-center px-1">
+            <ApiStatusIndicator status={apiStatus} />
           </div>
           {onNewReview && (
             <Button variant="ghost" size="md" className="justify-start lg:w-full" onClick={onNewReview}>

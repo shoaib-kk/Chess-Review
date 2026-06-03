@@ -58,9 +58,8 @@ export function AnalysisPanel({ summary, currentIndex, embedded = false }: Analy
 
             <p className="mt-4 max-w-2xl text-sm leading-6 text-slate-300">{coachCopy(move.classification)}</p>
 
-            <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_0.8fr]">
+            <div className="mt-4">
               <CoachFact label="Best move" value={move.best_move ?? "-"} large />
-              <CoachFact label="Centipawn loss" value={move.cp_loss === null ? "-" : `${Math.round(move.cp_loss)} cp`} />
             </div>
 
             <div className="mt-4 grid gap-3 sm:grid-cols-2">

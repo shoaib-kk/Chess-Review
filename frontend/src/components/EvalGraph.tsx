@@ -36,7 +36,6 @@ export function EvalGraphPanel({ summary, currentIndex, onSelectMove, embedded =
     label: `${move.move_number}${move.color === "White" ? "." : "..."} ${move.move_played}`,
     eval: clampEval(move.eval_white_pov),
     classification: move.classification,
-    cpLoss: move.cp_loss,
   }));
 
   const content = (

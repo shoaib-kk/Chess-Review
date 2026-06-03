@@ -9,6 +9,7 @@ import {
   getHealth,
 } from "./api/client";
 import { AnalysisPanel } from "./components/AnalysisPanel";
+import { ApiStatusIndicator } from "./components/ApiStatusIndicator";
 import { AppShell } from "./components/AppShell";
 import { ChessboardPanel } from "./components/ChessBoardPanel";
 import { ChessComImport } from "./components/ChessComImport";
@@ -110,7 +111,7 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [autoBuiltUsername, playerInsightsLimit, playerInsightsRatedOnly, playerInsightsTimeClass, repertoireLimit, repertoireRatedOnly, repertoireTimeClass, sharedUsername]);
+  }, [sharedUsername]);
 
   useEffect(() => {
     if (!summary) return;
@@ -290,7 +291,7 @@ export default function App() {
             onNewReview={summary ? startNewReview : undefined}
           />
 
-          <main className="mx-auto w-full max-w-7xl px-4 py-6 lg:ml-72 lg:px-6">
+          <main className="mx-auto w-full max-w-7xl px-4 py-6 lg:ml-60 lg:px-6">
             {error && (
               <div className="mb-5 border-[0.5px] border-app-border bg-app-panel px-4 py-3 text-sm text-app-text">
                 {error}
@@ -461,9 +462,8 @@ function HomeLogin({
           <Button variant="primary" disabled={!username.trim()} type="submit">
             Continue
           </Button>
-          <div className="flex items-center gap-2 border-[0.5px] border-app-border bg-app-panel px-3 py-2 text-xs text-app-muted">
-            <span className="h-2 w-2 bg-app-text" />
-            API {apiStatus}
+          <div className="flex items-center border-[0.5px] border-app-border bg-app-panel px-3 py-2">
+            <ApiStatusIndicator status={apiStatus} />
           </div>
         </form>
       </Card>

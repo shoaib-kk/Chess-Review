@@ -82,12 +82,15 @@ export interface ChessComAnalyzePayload extends AnalyzePayload {
 
 export interface OpeningInsight {
   opening_name: string;
+  opening_family: string;
+  variation: string | null;
   eco: string;
   games: number;
   frequency: number;
   win_rate: number;
   avg_accuracy: number | null;
   avg_cp_loss: number | null;
+  variations: OpeningVariationStat[];
 }
 
 export interface PlayerInsights {
@@ -162,6 +165,13 @@ export interface OpeningResponseStat {
   frequency: number;
 }
 
+export interface OpeningVariationStat {
+  variation: string;
+  games: number;
+  frequency: number;
+  eco: string;
+}
+
 export interface OpeningResultStat {
   result: "win" | "loss" | "draw";
   games: number;
@@ -173,6 +183,8 @@ export type RepertoireCategory = "white" | "black_vs_e4" | "black_vs_d4" | "blac
 export interface OpeningRepertoireRow {
   id: string;
   opening_name: string;
+  opening_family: string;
+  variation: string | null;
   eco: string;
   category: RepertoireCategory;
   games: number;
@@ -184,6 +196,7 @@ export interface OpeningRepertoireRow {
   avg_accuracy: number | null;
   avg_cp_loss: number | null;
   avg_game_length: number | null;
+  variations: OpeningVariationStat[];
   recent_games: OpeningGameExample[];
   common_opponent_responses: OpeningResponseStat[];
   typical_results: OpeningResultStat[];
@@ -194,6 +207,8 @@ export interface OpeningRepertoireRow {
 export interface OpeningTrendPoint {
   date: string | null;
   opening_name: string;
+  opening_family: string;
+  variation: string | null;
   eco: string;
   category: RepertoireCategory;
   accuracy: number;
@@ -222,6 +237,7 @@ export interface OpeningRepertoire {
   };
   repertoire: {
     white: OpeningRepertoireRow[];
+    black: OpeningRepertoireRow[];
     black_vs_e4: OpeningRepertoireRow[];
     black_vs_d4: OpeningRepertoireRow[];
     black_vs_other: OpeningRepertoireRow[];

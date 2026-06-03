@@ -11,6 +11,7 @@ import chess.pgn
 from opening_recognition import recognise_opening
 
 from .chesscom_client import get_recent_games
+from .opening_names import extract_opening_family, extract_variation
 
 DRAW_RESULTS = {
     "agreed",
@@ -145,6 +146,8 @@ def _record_from_game(raw: dict[str, Any], username: str) -> dict[str, Any] | No
     sans = _move_sans(pgn_game, limit=40)
     ply_count = len(list(pgn_game.mainline_moves())) if pgn_game else 0
     opening_name, eco = _opening_info(pgn_game)
+    opening_family = extract_opening_family(opening_name)
+    variation = extract_variation(opening_name)
     player_result = raw["white_result"] if color == "White" else raw["black_result"]
     score = _score_for_result(player_result)
     result = _result_bucket(score)
@@ -155,6 +158,8 @@ def _record_from_game(raw: dict[str, Any], username: str) -> dict[str, Any] | No
 
     return {
         "opening_name": opening_name,
+        "opening_family": opening_family,
+        "variation": variation,
         "eco": eco,
         "category": _category(color, sans),
         "color": color,
@@ -176,6 +181,7 @@ def _record_from_game(raw: dict[str, Any], username: str) -> dict[str, Any] | No
 def _new_group(record: dict[str, Any]) -> dict[str, Any]:
     return {
         "opening_name": record["opening_name"],
+        "opening_family": record["opening_family"],
         "eco": record["eco"],
         "category": record["category"],
         "games": 0,
@@ -188,6 +194,8 @@ def _new_group(record: dict[str, Any]) -> dict[str, Any]:
         "lengths": [],
         "records": [],
         "responses": Counter(),
+        "variations": Counter(),
+        "variation_ecos": {},
     }
 
 
@@ -211,8 +219,10 @@ def _opening_row(data: dict[str, Any], total_games: int) -> dict[str, Any]:
     worst = sorted(records, key=lambda item: (item["score"], item["accuracy"]))[:5]
 
     return {
-        "id": f"{data['category']}::{data['eco']}::{data['opening_name']}",
-        "opening_name": data["opening_name"],
+        "id": f"{data['category']}::{data['opening_family']}",
+        "opening_name": data["opening_family"],
+        "opening_family": data["opening_family"],
+        "variation": None,
         "eco": data["eco"],
         "category": data["category"],
         "games": data["games"],
@@ -228,6 +238,15 @@ def _opening_row(data: dict[str, Any], total_games: int) -> dict[str, Any]:
         "common_opponent_responses": [
             {"move": move, "games": count, "frequency": _pct(count, data["games"])}
             for move, count in data["responses"].most_common(8)
+        ],
+        "variations": [
+            {
+                "variation": variation,
+                "games": count,
+                "frequency": _pct(count, data["games"]),
+                "eco": data["variation_ecos"].get(variation, data["eco"]),
+            }
+            for variation, count in data["variations"].most_common()
         ],
         "typical_results": [
             {"result": result, "games": count, "frequency": _pct(count, data["games"])}
@@ -248,7 +267,7 @@ def _aggregate(records: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]
     category_totals = Counter(item["category"] for item in records)
 
     for record in records:
-        key = f"{record['eco']}::{record['opening_name']}"
+        key = record["opening_family"]
         category_groups = buckets[record["category"]]
         if key not in category_groups:
             category_groups[key] = _new_group(record)
@@ -266,6 +285,9 @@ def _aggregate(records: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]
         group["cp_losses"].append(record["cp_loss"])
         group["lengths"].append(record["game_length"])
         group["records"].append(record)
+        variation = record["variation"] or "Main line / Other"
+        group["variations"][variation] += 1
+        group["variation_ecos"].setdefault(variation, record["eco"])
         if record["opponent_response"]:
             group["responses"][record["opponent_response"]] += 1
 
@@ -275,6 +297,46 @@ def _aggregate(records: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]
             key=lambda row: (-row["games"], -row["win_rate"], row["opening_name"]),
         )
         for category, groups in buckets.items()
+    }
+
+
+def _aggregate_by_color(records: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
+    buckets: dict[str, dict[str, dict[str, Any]]] = {"white": {}, "black": {}}
+    color_totals = Counter("white" if item["color"] == "White" else "black" for item in records)
+
+    for record in records:
+        color_key = "white" if record["color"] == "White" else "black"
+        key = record["opening_family"]
+        color_groups = buckets[color_key]
+        if key not in color_groups:
+            color_groups[key] = _new_group(record)
+            color_groups[key]["category"] = color_key
+
+        group = color_groups[key]
+        group["games"] += 1
+        group["score"] += record["score"]
+        if record["result"] == "win":
+            group["wins"] += 1
+        elif record["result"] == "draw":
+            group["draws"] += 1
+        else:
+            group["losses"] += 1
+        group["accuracies"].append(record["accuracy"])
+        group["cp_losses"].append(record["cp_loss"])
+        group["lengths"].append(record["game_length"])
+        group["records"].append(record)
+        variation = record["variation"] or "Main line / Other"
+        group["variations"][variation] += 1
+        group["variation_ecos"].setdefault(variation, record["eco"])
+        if record["opponent_response"]:
+            group["responses"][record["opponent_response"]] += 1
+
+    return {
+        color: sorted(
+            (_opening_row(group, max(1, color_totals[color])) for group in groups.values()),
+            key=lambda row: (-row["win_rate"], -row["games"], row["opening_name"]),
+        )
+        for color, groups in buckets.items()
     }
 
 
@@ -342,7 +404,9 @@ def _trends(records: list[dict[str, Any]]) -> dict[str, Any]:
     points = [
         {
             "date": record["date"],
-            "opening_name": record["opening_name"],
+            "opening_name": record["opening_family"],
+            "opening_family": record["opening_family"],
+            "variation": record["variation"],
             "eco": record["eco"],
             "category": record["category"],
             "accuracy": record["accuracy"],
@@ -384,7 +448,8 @@ def build_opening_repertoire(
     records.sort(key=lambda item: item["end_time"], reverse=True)
 
     repertoire = _aggregate(records)
-    all_rows = [row for category_rows in repertoire.values() for row in category_rows]
+    color_repertoire = _aggregate_by_color(records)
+    all_rows = [row for category_rows in color_repertoire.values() for row in category_rows]
     strongest = max(_qualified(all_rows, minimum_games=1), key=lambda row: (row["win_rate"], row["avg_accuracy"] or 0), default=None)
     weakest = min(_qualified(all_rows, minimum_games=1), key=lambda row: (row["win_rate"], row["avg_accuracy"] or 100), default=None)
 
@@ -398,7 +463,8 @@ def build_opening_repertoire(
             "weakest_opening": weakest,
         },
         "repertoire": {
-            "white": repertoire["white"],
+            "white": color_repertoire["white"],
+            "black": color_repertoire["black"],
             "black_vs_e4": repertoire["black_vs_e4"],
             "black_vs_d4": repertoire["black_vs_d4"],
             "black_vs_other": repertoire["black_vs_other"],
