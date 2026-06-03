@@ -35,6 +35,9 @@ class GameSummaryResponse(BaseModel):
     result: str
     total_moves: int
     initial_fen: str
+    opening_name: Optional[str] = None
+    eco_code: Optional[str] = None
+    opening_matched_plies: int = 0
     white_inaccuracies: int
     white_mistakes: int
     white_blunders: int

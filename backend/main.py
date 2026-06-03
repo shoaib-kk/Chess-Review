@@ -11,6 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from .schemas import AnalyzeRequest, ChessComAnalyzeRequest, ChessComGameResponse, GameSummaryResponse, HealthResponse
 from .serializers import serialize_game_summary
 from .services.chesscom_client import ChessComClientError, get_recent_games
+from .services.opening_repertoire import get_opening_repertoire
 from .services.player_insights import get_player_insights
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -75,6 +76,24 @@ def player_insights(
 ) -> dict:
     try:
         return get_player_insights(
+            username=username,
+            limit=limit,
+            time_class=time_class,
+            rated_only=rated_only,
+        )
+    except ChessComClientError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.get("/opening-repertoire/{username}")
+def opening_repertoire(
+    username: str,
+    limit: int = Query(default=500, ge=1, le=500),
+    time_class: str | None = Query(default=None, pattern="^(rapid|blitz|bullet)$"),
+    rated_only: bool = Query(default=False),
+) -> dict:
+    try:
+        return get_opening_repertoire(
             username=username,
             limit=limit,
             time_class=time_class,

@@ -2,8 +2,8 @@ import { Button } from "./ui/Button";
 
 interface HeaderProps {
   apiStatus: "checking" | "ok" | "down";
-  activeMode: "chesscom" | "pgn" | "insights";
-  onModeChange: (mode: "chesscom" | "pgn" | "insights") => void;
+  activeMode: "chesscom" | "pgn" | "insights" | "repertoire";
+  onModeChange: (mode: "chesscom" | "pgn" | "insights" | "repertoire") => void;
   onNewReview?: () => void;
 }
 
@@ -58,6 +58,13 @@ export function Header({ apiStatus, activeMode, onModeChange, onNewReview }: Hea
             onClick={() => onModeChange("insights")}
           >
             Player Insights
+          </Button>
+          <Button
+            variant={activeMode === "repertoire" ? "primary" : "secondary"}
+            size="md"
+            onClick={() => onModeChange("repertoire")}
+          >
+            Opening Repertoire
           </Button>
         </div>
       </div>

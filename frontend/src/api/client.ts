@@ -1,5 +1,13 @@
 import axios from "axios";
-import type { AnalyzePayload, ChessComAnalyzePayload, ChessComGame, GameSummary, PlayerInsights } from "../types";
+import type {
+  AnalyzePayload,
+  ChessComAnalyzePayload,
+  ChessComGame,
+  GameSummary,
+  OpeningRepertoire,
+  PlayerInsights,
+  TimeClassFilter,
+} from "../types";
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL ?? "http://127.0.0.1:8001",
@@ -25,11 +33,25 @@ export async function analyzeChessComGame(payload: ChessComAnalyzePayload): Prom
 
 export async function fetchPlayerInsights(
   username: string,
-  params: { limit?: number; time_class?: "rapid" | "blitz" | "bullet" | ""; rated_only?: boolean } = {},
+  params: { limit?: number; time_class?: TimeClassFilter; rated_only?: boolean } = {},
 ): Promise<PlayerInsights> {
   const response = await api.get<PlayerInsights>(`/player-insights/${encodeURIComponent(username)}`, {
     params: {
       limit: params.limit ?? 200,
+      time_class: params.time_class || undefined,
+      rated_only: params.rated_only ?? false,
+    },
+  });
+  return response.data;
+}
+
+export async function fetchOpeningRepertoire(
+  username: string,
+  params: { limit?: number; time_class?: TimeClassFilter; rated_only?: boolean } = {},
+): Promise<OpeningRepertoire> {
+  const response = await api.get<OpeningRepertoire>(`/opening-repertoire/${encodeURIComponent(username)}`, {
+    params: {
+      limit: params.limit ?? 500,
       time_class: params.time_class || undefined,
       rated_only: params.rated_only ?? false,
     },

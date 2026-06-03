@@ -1,73 +1,61 @@
-# ♟ Chess Game Reviewer — Streamlit App
+# Chess Review
 
-A Chess.com-style game review application built with Streamlit and Stockfish.
+A Chess.com-style game review app with a FastAPI backend, React frontend, and Stockfish analysis.
+
+## Key Features
+
+- Import recent Chess.com games by username.
+- Paste or upload PGN text for analysis.
+- Analyze games with Stockfish using fast, normal, or deep modes.
+- Review move classifications, centipawn loss, best moves, and principal variations.
+- Navigate the board with controls, move-list clicks, graph clicks, or left/right arrow keys.
+- Show ECO/opening recognition when available.
+- Flip the board and review only the imported user's moves.
+- View player-insight summaries from recent Chess.com games.
 
 ## Project Structure
 
-```
-chess_app/
-├── app.py                        # Main Streamlit entry point
-├── analysis/
-│   ├── __init__.py
-│   ├── models.py                 # MoveAnalysis, GameSummary, classification
-│   ├── pgn_parser.py             # PGN loading & position iteration
-│   └── stockfish_engine.py       # Stockfish wrapper with PV support
-├── services/
-│   ├── __init__.py
-│   ├── game_analyzer.py          # Analysis orchestration
-│   └── board_renderer.py         # SVG board rendering
-├── components/
-│   ├── __init__.py
-│   ├── board_panel.py            # Left: interactive board + nav
-│   ├── move_list.py              # Center: move list with badges
-│   ├── eval_graph.py             # Center: evaluation graph (Plotly)
-│   └── analysis_panel.py         # Right: per-move analysis + summary
-├── sample.pgn
-└── requirements.txt
+```text
+backend/                 FastAPI API, serializers, Chess.com import, player insights
+frontend/                React + Vite frontend
+game_analyzer.py         PGN analysis orchestration
+models.py                Analysis dataclasses and move classification
+opening_recognition.py   ECO/opening recognition
+pgn_parser.py            PGN parsing helpers
+stockfish_engine.py      Stockfish wrapper
+requirements.txt         Python dependencies
 ```
 
-## Prerequisites
+## Setup
 
-### 1. Install Stockfish
-
-| Platform | Command |
-|----------|---------|
-| Ubuntu/Debian | `sudo apt install stockfish` |
-| macOS | `brew install stockfish` |
-| Windows | [stockfishchess.org/download](https://stockfishchess.org/download/) |
-
-### 2. Install Python dependencies
+Install Python dependencies:
 
 ```bash
 pip install -r requirements.txt
 ```
 
-## Running
+Install frontend dependencies:
 
 ```bash
-streamlit run app.py
+cd frontend
+npm install
 ```
 
-Then open http://localhost:8501 in your browser.
+Install Stockfish and make sure it is available on your PATH, or configure a custom path in the app/backend payloads.
 
-## Features
+## Running Locally
 
-| Feature | Details |
-|---------|---------|
-| PGN input | File upload, paste, or built-in sample game |
-| Interactive board | SVG board with move arrows |
-| Best-move arrow | Green arrow shows engine's recommendation |
-| Eval graph | Plotly chart with classification markers |
-| Move list | Paired white/black moves, click to navigate |
-| Analysis panel | Eval before/after, CP loss, PV, summary stats |
-| Board flip | Toggle White/Black perspective |
-| Depth control | Sidebar slider (8–24) |
+Start the backend:
 
-## Move Classification
+```bash
+python -m uvicorn backend.main:app --host 127.0.0.1 --port 8001
+```
 
-| Symbol | Grade | CP Loss |
-|--------|-------|---------|
-| ✓ | Excellent | 0–30 |
-| ?! | Inaccuracy | 31–80 |
-| ? | Mistake | 81–200 |
-| ?? | Blunder | 200+ |
+Start the frontend:
+
+```bash
+cd frontend
+npm run dev
+```
+
+Open http://127.0.0.1:5173.

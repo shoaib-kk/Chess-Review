@@ -16,6 +16,15 @@ export function SummaryStrip({ summary }: SummaryStripProps) {
 
   return (
     <Card className="overflow-hidden">
+      {summary.opening_name && (
+        <div className="border-b border-app-border/70 px-4 py-3 sm:px-5">
+          <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-app-muted">Opening</p>
+          <p className="mt-1 truncate text-sm font-semibold text-app-text">
+            {summary.eco_code && <span className="mr-2 font-mono text-app-accent">{summary.eco_code}</span>}
+            {summary.opening_name}
+          </p>
+        </div>
+      )}
       <div className="grid grid-cols-2 divide-x divide-y divide-app-border/70 md:grid-cols-6 md:divide-y-0">
         <StripItem label="White Accuracy" value={fmt(summary.white_accuracy)} accent="text-app-lightSquare" />
         <StripItem label="Black Accuracy" value={fmt(summary.black_accuracy)} accent="text-app-darkSquare" />

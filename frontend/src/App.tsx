@@ -1,5 +1,13 @@
 import { useEffect, useState } from "react";
-import { analyzeChessComGame, analyzeGame, apiErrorMessage, fetchChessComGames, fetchPlayerInsights, getHealth } from "./api/client";
+import {
+  analyzeChessComGame,
+  analyzeGame,
+  apiErrorMessage,
+  fetchChessComGames,
+  fetchOpeningRepertoire,
+  fetchPlayerInsights,
+  getHealth,
+} from "./api/client";
 import { AnalysisPanel } from "./components/AnalysisPanel";
 import { AppShell } from "./components/AppShell";
 import { ChessboardPanel } from "./components/ChessBoardPanel";
@@ -7,14 +15,17 @@ import { ChessComImport } from "./components/ChessComImport";
 import { EvalGraphPanel } from "./components/EvalGraph";
 import { Header } from "./components/Header";
 import { MoveListPanel } from "./components/MoveList";
+import { OpeningRepertoirePage } from "./components/OpeningRepertoirePage";
 import { PlayerInsightsPage } from "./components/PlayerInsightsPage";
 import { PgnInput } from "./components/PgnInput";
 import { SummaryStrip } from "./components/SummaryStrip";
-import type { AnalysisMode, ChessComGame, GameSummary, PlayerInsights } from "./types";
+import type { AnalysisMode, ChessComGame, GameSummary, OpeningRepertoire, PlayerInsights, TimeClassFilter } from "./types";
+
+type AppMode = "chesscom" | "pgn" | "insights" | "repertoire";
 
 export default function App() {
   const [apiStatus, setApiStatus] = useState<"checking" | "ok" | "down">("checking");
-  const [activeMode, setActiveMode] = useState<"chesscom" | "pgn" | "insights">("chesscom");
+  const [activeMode, setActiveMode] = useState<AppMode>("chesscom");
   const [summary, setSummary] = useState<GameSummary | null>(null);
   const [moveIndex, setMoveIndex] = useState(-1);
   const [flipped, setFlipped] = useState(false);
@@ -27,6 +38,49 @@ export default function App() {
       .then(() => setApiStatus("ok"))
       .catch(() => setApiStatus("down"));
   }, []);
+
+  useEffect(() => {
+    if (!summary) return;
+    const currentSummary = summary;
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+      if (event.altKey || event.ctrlKey || event.metaKey) return;
+
+      const target = event.target as HTMLElement | null;
+      if (target?.isContentEditable) return;
+      if (target && ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName)) return;
+
+      event.preventDefault();
+      setMoveIndex((currentIndex) => {
+        const navigationIndexes =
+          reviewMyMovesOnly && currentSummary.user_color
+            ? currentSummary.move_analyses
+                .map((move, index) => (move.color === currentSummary.user_color ? index : -2))
+                .filter((index) => index >= 0)
+            : currentSummary.move_analyses.map((_, index) => index);
+
+        if (!navigationIndexes.length) return -1;
+        const firstIndex = reviewMyMovesOnly ? navigationIndexes[0] ?? -1 : -1;
+        const lastIndex = navigationIndexes[navigationIndexes.length - 1] ?? currentSummary.total_moves - 1;
+
+        if (event.key === "ArrowLeft") {
+          if (reviewMyMovesOnly) {
+            return [...navigationIndexes].reverse().find((index) => index < currentIndex) ?? firstIndex;
+          }
+          return Math.max(-1, currentIndex - 1);
+        }
+
+        if (reviewMyMovesOnly) {
+          return navigationIndexes.find((index) => index > currentIndex) ?? lastIndex;
+        }
+        return Math.min(currentSummary.total_moves - 1, currentIndex + 1);
+      });
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [reviewMyMovesOnly, summary]);
 
   async function handleAnalyze(pgn: string, depth: number, mode: AnalysisMode) {
     setLoading(true);
@@ -76,12 +130,30 @@ export default function App() {
 
   async function handleFetchPlayerInsights(
     username: string,
-    params: { limit: number; time_class: "rapid" | "blitz" | "bullet" | ""; rated_only: boolean },
+    params: { limit: number; time_class: TimeClassFilter; rated_only: boolean },
   ): Promise<PlayerInsights | null> {
     setLoading(true);
     setError(null);
     try {
       const result = await fetchPlayerInsights(username, params);
+      setApiStatus("ok");
+      return result;
+    } catch (err) {
+      setError(apiErrorMessage(err));
+      return null;
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleFetchOpeningRepertoire(
+    username: string,
+    params: { limit: number; time_class: TimeClassFilter; rated_only: boolean },
+  ): Promise<OpeningRepertoire | null> {
+    setLoading(true);
+    setError(null);
+    try {
+      const result = await fetchOpeningRepertoire(username, params);
       setApiStatus("ok");
       return result;
     } catch (err) {
@@ -125,8 +197,10 @@ export default function App() {
               />
             ) : activeMode === "pgn" ? (
               <PgnInput loading={loading} onAnalyze={handleAnalyze} />
-            ) : (
+            ) : activeMode === "insights" ? (
               <PlayerInsightsPage loading={loading} onFetchInsights={handleFetchPlayerInsights} />
+            ) : (
+              <OpeningRepertoirePage loading={loading} onFetchRepertoire={handleFetchOpeningRepertoire} />
             )}
           </div>
         ) : (
@@ -135,6 +209,12 @@ export default function App() {
               <PlayerInsightsPage
                 loading={loading}
                 onFetchInsights={handleFetchPlayerInsights}
+                initialUsername={summary.user_username}
+              />
+            ) : activeMode === "repertoire" ? (
+              <OpeningRepertoirePage
+                loading={loading}
+                onFetchRepertoire={handleFetchOpeningRepertoire}
                 initialUsername={summary.user_username}
               />
             ) : (

@@ -76,6 +76,9 @@ class GameSummary:
     date: str
     result: str
     total_moves: int
+    opening_name: Optional[str] = None
+    eco_code: Optional[str] = None
+    opening_matched_plies: int = 0
     white_inaccuracies: int = 0
     white_mistakes: int = 0
     white_blunders: int = 0

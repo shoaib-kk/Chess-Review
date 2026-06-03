@@ -7,6 +7,7 @@ import chess
 from typing import Optional, Callable
 
 from models import MoveAnalysis, GameSummary, classify_move
+from opening_recognition import recognise_opening
 from pgn_parser import load_game_from_pgn_string, extract_headers, iter_positions
 from stockfish_engine import StockfishEngine
 
@@ -71,6 +72,7 @@ def analyze_pgn(
     """
     game = load_game_from_pgn_string(pgn_text)
     headers = extract_headers(game)
+    opening = recognise_opening(game)
 
     summary = GameSummary(
         white_player=headers["white"],
@@ -80,6 +82,9 @@ def analyze_pgn(
         result=headers["result"],
         total_moves=0,
         initial_fen=game.board().fen(),
+        opening_name=opening.name if opening else None,
+        eco_code=opening.eco if opening else None,
+        opening_matched_plies=opening.matched_plies if opening else 0,
     )
 
     positions = list(iter_positions(game))
