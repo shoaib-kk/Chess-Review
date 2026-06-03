@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import {
   Bar,
@@ -22,6 +22,7 @@ import type {
 
 interface OpeningRepertoirePageProps {
   loading: boolean;
+  repertoire: OpeningRepertoire | null;
   username: string;
   onUsernameChange: (username: string) => void;
   limit: number;
@@ -67,6 +68,7 @@ function shortName(value: string) {
 
 export function OpeningRepertoirePage({
   loading,
+  repertoire,
   username,
   onUsernameChange,
   limit,
@@ -77,7 +79,6 @@ export function OpeningRepertoirePage({
   onRatedOnlyChange,
   onFetchRepertoire,
 }: OpeningRepertoirePageProps) {
-  const [repertoire, setRepertoire] = useState<OpeningRepertoire | null>(null);
   const [activeTab, setActiveTab] = useState<TabKey>("white");
   const [selectedOpening, setSelectedOpening] = useState<OpeningRepertoireRow | null>(null);
 
@@ -94,10 +95,14 @@ export function OpeningRepertoirePage({
     [repertoire],
   );
 
+  useEffect(() => {
+    setSelectedOpening(repertoire?.summary.strongest_opening ?? repertoire?.repertoire.white[0] ?? null);
+    setActiveTab("white");
+  }, [repertoire]);
+
   async function fetchRepertoire() {
     if (!username.trim()) return;
     const result = await onFetchRepertoire(username.trim(), { limit, time_class: timeClass, rated_only: ratedOnly });
-    setRepertoire(result);
     setSelectedOpening(result?.summary.strongest_opening ?? result?.repertoire.white[0] ?? null);
     setActiveTab("white");
   }

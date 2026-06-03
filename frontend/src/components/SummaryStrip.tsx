@@ -55,7 +55,7 @@ export function SummaryStrip({
         </div>
         <p className="mt-1 truncate text-base font-medium text-app-text">{opening}</p>
         <p className="mt-1 text-sm text-app-muted">
-          Accuracy {fmt(accuracy, "%")} {"\u2022"} {plural(inaccuracies, "Inaccuracy")} {"\u2022"} {plural(mistakes, "Mistake")} {"\u2022"} {plural(blunders, "Blunder")}
+          {summary.white_player} {fmt(summary.white_accuracy, "%")} {"\u2022"} {summary.black_player} {fmt(summary.black_accuracy, "%")} {"\u2022"} Overall {fmt(accuracy, "%")} {"\u2022"} {plural(inaccuracies, "Inaccuracy")} {"\u2022"} {plural(mistakes, "Mistake")} {"\u2022"} {plural(blunders, "Blunder")}
         </p>
       </div>
 

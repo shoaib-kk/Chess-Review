@@ -1,5 +1,5 @@
 import { Chessboard } from "react-chessboard";
-import type { GameSummary, MoveAnalysis } from "../types";
+import type { GameSummary, MoveAnalysis, MoveClassification } from "../types";
 import { ClassificationBadge } from "./ui/Badge";
 import { Button } from "./ui/Button";
 import { Card } from "./ui/Card";
@@ -18,6 +18,32 @@ function uciSquares(uci: string | null): [string, string] | null {
   return [uci.slice(0, 2), uci.slice(2, 4)];
 }
 
+const annotationSymbols: Record<MoveClassification, string> = {
+  Excellent: "",
+  Inaccuracy: "?!",
+  Mistake: "?",
+  Blunder: "??",
+};
+
+const annotationStyles: Record<MoveClassification, { backgroundColor: string; color: string }> = {
+  Excellent: { backgroundColor: "transparent", color: "inherit" },
+  Inaccuracy: { backgroundColor: "#eab308", color: "#0f172a" },
+  Mistake: { backgroundColor: "#f97316", color: "#ffffff" },
+  Blunder: { backgroundColor: "#ef4444", color: "#ffffff" },
+};
+
+function squareOverlayPosition(square: string, flipped: boolean) {
+  const file = square.charCodeAt(0) - 97;
+  const rank = Number(square[1]) - 1;
+  const boardFile = flipped ? 7 - file : file;
+  const boardRank = flipped ? rank : 7 - rank;
+
+  return {
+    left: `${((boardFile + 0.82) / 8) * 100}%`,
+    top: `${((boardRank + 0.18) / 8) * 100}%`,
+  };
+}
+
 function mistakeSquare(move: MoveAnalysis | undefined): string | null {
   if (!move || move.classification === "Excellent") return null;
   return uciSquares(move.played_move_uci)?.[1] ?? null;
@@ -26,6 +52,30 @@ function mistakeSquare(move: MoveAnalysis | undefined): string | null {
 function moveLabel(move: MoveAnalysis | undefined) {
   if (!move) return "Starting position";
   return `${move.move_number}${move.color === "White" ? "." : "..."} ${move.move_played}`;
+}
+
+function evalWhitePov(move: MoveAnalysis | undefined): number | null {
+  if (!move?.eval_after && move?.eval_after !== 0) return null;
+  return move.color === "White" ? -move.eval_after : move.eval_after;
+}
+
+function evalBarPercent(evalCp: number | null) {
+  if (evalCp === null) return 50;
+  if (Math.abs(evalCp) >= 100000) return evalCp > 0 ? 100 : 0;
+  const pawns = evalCp / 100;
+  return Math.max(0, Math.min(100, 50 + pawns * 8));
+}
+
+function evalLabel(evalCp: number | null) {
+  if (evalCp === null) return "0.00";
+  if (Math.abs(evalCp) >= 100000) return evalCp > 0 ? "Mate" : "-Mate";
+  const pawns = evalCp / 100;
+  return `${pawns > 0 ? "+" : ""}${pawns.toFixed(2)}`;
+}
+
+function evalLeader(evalCp: number | null) {
+  if (evalCp === null || Math.abs(evalCp) < 1) return "equal";
+  return evalCp > 0 ? "white" : "black";
 }
 
 export function ChessboardPanel({
@@ -38,9 +88,13 @@ export function ChessboardPanel({
 }: ChessboardPanelProps) {
   const move = moveIndex >= 0 ? summary.move_analyses[moveIndex] : undefined;
   const position = move?.fen_after ?? summary.initial_fen;
+  const currentEval = evalWhitePov(move);
+  const whitePercent = evalBarPercent(currentEval);
+  const leader = evalLeader(currentEval);
   const played = uciSquares(move?.played_move_uci ?? null);
   const best = uciSquares(move?.best_move_uci ?? null);
   const highlightedSquare = mistakeSquare(move);
+  const annotationSquare = move && annotationSymbols[move.classification] ? played?.[1] : null;
 
   const navigationIndexes =
     reviewMyMovesOnly && summary.user_color
@@ -86,21 +140,54 @@ export function ChessboardPanel({
       </div>
 
       <div className="px-4 pb-5 pt-5 sm:px-5">
-        <div className="chessboard-animated mx-auto max-w-[680px]">
-          <Chessboard
-            id={1}
-            position={position}
-            animationDuration={220}
-            boardOrientation={flipped ? "black" : "white"}
-            arePiecesDraggable={false}
-            customBoardStyle={{
-              overflow: "hidden",
-            }}
-            customDarkSquareStyle={{ backgroundColor: "#b58863" }}
-            customLightSquareStyle={{ backgroundColor: "#f0d9b5" }}
-            customArrows={arrows as never}
-            customSquareStyles={customSquareStyles}
-          />
+        <div className="mx-auto grid max-w-[730px] grid-cols-[28px_minmax(0,680px)] gap-3">
+          <div className="relative overflow-hidden bg-slate-950 ring-1 ring-app-border" aria-label={`Evaluation ${evalLabel(currentEval)}`}>
+            <div className="absolute inset-x-0 bottom-0 bg-slate-100 transition-all duration-200" style={{ height: `${whitePercent}%` }} />
+            <div className="absolute inset-x-0 top-0 bg-slate-900 transition-all duration-200" style={{ height: `${100 - whitePercent}%` }} />
+            {leader === "black" && (
+              <div className="absolute inset-x-0 top-1 text-center font-mono text-[10px] font-medium text-slate-100">
+                {evalLabel(currentEval)}
+              </div>
+            )}
+            {leader === "white" && (
+              <div className="absolute inset-x-0 bottom-1 text-center font-mono text-[10px] font-medium text-slate-950">
+                {evalLabel(currentEval)}
+              </div>
+            )}
+            {leader === "equal" && (
+              <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 text-center font-mono text-[10px] font-medium text-slate-100 mix-blend-difference">
+                {evalLabel(currentEval)}
+              </div>
+            )}
+          </div>
+          <div className="chessboard-animated relative">
+            <Chessboard
+              id={1}
+              position={position}
+              animationDuration={220}
+              boardOrientation={flipped ? "black" : "white"}
+              arePiecesDraggable={false}
+              customBoardStyle={{
+                overflow: "hidden",
+              }}
+              customDarkSquareStyle={{ backgroundColor: "#b58863" }}
+              customLightSquareStyle={{ backgroundColor: "#f0d9b5" }}
+              customArrows={arrows as never}
+              customSquareStyles={customSquareStyles}
+            />
+            {move && annotationSquare && (
+              <div
+                className="pointer-events-none absolute z-10 grid h-5 w-5 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full font-mono text-[9px] font-medium leading-none opacity-100"
+                style={{
+                  ...squareOverlayPosition(annotationSquare, flipped),
+                  ...annotationStyles[move.classification],
+                }}
+                aria-label={move.classification}
+              >
+                {annotationSymbols[move.classification]}
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="mt-4 grid grid-cols-[1fr_1fr_minmax(74px,0.8fr)_1fr_1fr] gap-2">

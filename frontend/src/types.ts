@@ -128,6 +128,8 @@ export interface PlayerInsights {
   };
   mistakes: {
     categories: Array<{ category: string; count: number; percentage: number }>;
+    by_phase: Array<{ category: string; count: number; percentage: number }>;
+    by_type: Array<{ category: string; count: number; percentage: number }>;
     top_weaknesses: Array<{ category: string; count: number; percentage: number }>;
   };
   profile: {

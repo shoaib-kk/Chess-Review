@@ -34,9 +34,14 @@ export default function App() {
   const [playerInsightsLimit, setPlayerInsightsLimit] = useState(200);
   const [playerInsightsTimeClass, setPlayerInsightsTimeClass] = useState<TimeClassFilter>("");
   const [playerInsightsRatedOnly, setPlayerInsightsRatedOnly] = useState(false);
+  const [playerInsights, setPlayerInsights] = useState<PlayerInsights | null>(null);
+  const [playerInsightsLoading, setPlayerInsightsLoading] = useState(false);
   const [repertoireLimit, setRepertoireLimit] = useState(500);
   const [repertoireTimeClass, setRepertoireTimeClass] = useState<TimeClassFilter>("");
   const [repertoireRatedOnly, setRepertoireRatedOnly] = useState(false);
+  const [openingRepertoire, setOpeningRepertoire] = useState<OpeningRepertoire | null>(null);
+  const [repertoireLoading, setRepertoireLoading] = useState(false);
+  const [autoBuiltUsername, setAutoBuiltUsername] = useState("");
   const [summary, setSummary] = useState<GameSummary | null>(null);
   const [moveIndex, setMoveIndex] = useState(-1);
   const [flipped, setFlipped] = useState(false);
@@ -55,6 +60,57 @@ export default function App() {
     if (trimmed) localStorage.setItem(USERNAME_STORAGE_KEY, trimmed);
     else localStorage.removeItem(USERNAME_STORAGE_KEY);
   }, [sharedUsername]);
+
+  useEffect(() => {
+    const username = sharedUsername.trim();
+    if (!username || autoBuiltUsername) return;
+
+    let cancelled = false;
+    setAutoBuiltUsername(username);
+    setPlayerInsights(null);
+    setOpeningRepertoire(null);
+    setError(null);
+
+    setPlayerInsightsLoading(true);
+    fetchPlayerInsights(username, {
+      limit: playerInsightsLimit,
+      time_class: playerInsightsTimeClass,
+      rated_only: playerInsightsRatedOnly,
+    })
+      .then((result) => {
+        if (cancelled) return;
+        setPlayerInsights(result);
+        setApiStatus("ok");
+      })
+      .catch((err) => {
+        if (!cancelled) setError(apiErrorMessage(err));
+      })
+      .finally(() => {
+        if (!cancelled) setPlayerInsightsLoading(false);
+      });
+
+    setRepertoireLoading(true);
+    fetchOpeningRepertoire(username, {
+      limit: repertoireLimit,
+      time_class: repertoireTimeClass,
+      rated_only: repertoireRatedOnly,
+    })
+      .then((result) => {
+        if (cancelled) return;
+        setOpeningRepertoire(result);
+        setApiStatus("ok");
+      })
+      .catch((err) => {
+        if (!cancelled) setError(apiErrorMessage(err));
+      })
+      .finally(() => {
+        if (!cancelled) setRepertoireLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [autoBuiltUsername, playerInsightsLimit, playerInsightsRatedOnly, playerInsightsTimeClass, repertoireLimit, repertoireRatedOnly, repertoireTimeClass, sharedUsername]);
 
   useEffect(() => {
     if (!summary) return;
@@ -151,18 +207,20 @@ export default function App() {
     username: string,
     params: { limit: number; time_class: TimeClassFilter; rated_only: boolean },
   ): Promise<PlayerInsights | null> {
-    setLoading(true);
+    setPlayerInsightsLoading(true);
     setError(null);
     try {
       setSharedUsername(username);
       const result = await fetchPlayerInsights(username, params);
+      setPlayerInsights(result);
+      setAutoBuiltUsername(username.trim());
       setApiStatus("ok");
       return result;
     } catch (err) {
       setError(apiErrorMessage(err));
       return null;
     } finally {
-      setLoading(false);
+      setPlayerInsightsLoading(false);
     }
   }
 
@@ -170,18 +228,20 @@ export default function App() {
     username: string,
     params: { limit: number; time_class: TimeClassFilter; rated_only: boolean },
   ): Promise<OpeningRepertoire | null> {
-    setLoading(true);
+    setRepertoireLoading(true);
     setError(null);
     try {
       setSharedUsername(username);
       const result = await fetchOpeningRepertoire(username, params);
+      setOpeningRepertoire(result);
+      setAutoBuiltUsername(username.trim());
       setApiStatus("ok");
       return result;
     } catch (err) {
       setError(apiErrorMessage(err));
       return null;
     } finally {
-      setLoading(false);
+      setRepertoireLoading(false);
     }
   }
 
@@ -199,6 +259,9 @@ export default function App() {
 
   function handleLogout() {
     setSharedUsername("");
+    setAutoBuiltUsername("");
+    setPlayerInsights(null);
+    setOpeningRepertoire(null);
     startNewReview();
     setActiveMode("chesscom");
   }
@@ -250,7 +313,8 @@ export default function App() {
                   <PgnInput loading={loading} onAnalyze={handleAnalyze} />
                 ) : activeMode === "insights" ? (
                   <PlayerInsightsPage
-                    loading={loading}
+                    loading={loading || playerInsightsLoading}
+                    insights={playerInsights}
                     username={sharedUsername}
                     onUsernameChange={setSharedUsername}
                     limit={playerInsightsLimit}
@@ -263,7 +327,8 @@ export default function App() {
                   />
                 ) : (
                   <OpeningRepertoirePage
-                    loading={loading}
+                    loading={loading || repertoireLoading}
+                    repertoire={openingRepertoire}
                     username={sharedUsername}
                     onUsernameChange={setSharedUsername}
                     limit={repertoireLimit}
@@ -280,7 +345,8 @@ export default function App() {
               <div className="grid gap-5">
                 {activeMode === "insights" ? (
                   <PlayerInsightsPage
-                    loading={loading}
+                    loading={loading || playerInsightsLoading}
+                    insights={playerInsights}
                     username={sharedUsername || summary.user_username || ""}
                     onUsernameChange={setSharedUsername}
                     limit={playerInsightsLimit}
@@ -293,7 +359,8 @@ export default function App() {
                   />
                 ) : activeMode === "repertoire" ? (
                   <OpeningRepertoirePage
-                    loading={loading}
+                    loading={loading || repertoireLoading}
+                    repertoire={openingRepertoire}
                     username={sharedUsername || summary.user_username || ""}
                     onUsernameChange={setSharedUsername}
                     limit={repertoireLimit}

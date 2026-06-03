@@ -4,15 +4,10 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
-  Line,
-  LineChart,
-  Pie,
-  PieChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
-  Cell,
 } from "recharts";
 import type { OpeningInsight, PlayerInsights, TimeClassFilter } from "../types";
 import { Button } from "./ui/Button";
@@ -21,6 +16,7 @@ import { Badge } from "./ui/Badge";
 
 interface PlayerInsightsPageProps {
   loading: boolean;
+  insights: PlayerInsights | null;
   username: string;
   onUsernameChange: (username: string) => void;
   limit: number;
@@ -35,7 +31,6 @@ interface PlayerInsightsPageProps {
   ) => Promise<PlayerInsights | null>;
 }
 
-const PIE_COLORS = ["#1a1a1a", "#3f3f3f", "#5f5f5f", "#7a7a7a", "#9b9b9b", "#b8b8b8", "#d0d0d0", "#e0e0e0"];
 const CHART_GRID = "rgba(0,0,0,0.1)";
 const CHART_TEXT = "#6b6b6b";
 const CHART_STROKE = "#1a1a1a";
@@ -51,6 +46,7 @@ function shortLabel(value: string) {
 
 export function PlayerInsightsPage({
   loading,
+  insights,
   username,
   onUsernameChange,
   limit,
@@ -61,20 +57,18 @@ export function PlayerInsightsPage({
   onRatedOnlyChange,
   onFetchInsights,
 }: PlayerInsightsPageProps) {
-  const [insights, setInsights] = useState<PlayerInsights | null>(null);
-  const [activeTab, setActiveTab] = useState<"openings" | "trends" | "mistakes" | "profile">("openings");
+  const [activeTab, setActiveTab] = useState<"openings" | "mistakes" | "profile">("openings");
 
   async function fetchInsights() {
     if (!username.trim()) return;
-    const result = await onFetchInsights(username.trim(), { limit, time_class: timeClass, rated_only: ratedOnly });
-    setInsights(result);
+    await onFetchInsights(username.trim(), { limit, time_class: timeClass, rated_only: ratedOnly });
   }
 
   return (
     <div className="grid gap-5">
       <Card>
         <CardHeader title="Player Insights" eyebrow="Chess.com history">
-          High-level opening habits, trends, weaknesses, and recommendations.
+          High-level opening habits, weaknesses, and recommendations.
         </CardHeader>
         <div className="grid gap-3 px-5 pb-5 lg:grid-cols-[1fr_120px_150px_auto_auto] lg:items-center">
           <input
@@ -123,7 +117,7 @@ export function PlayerInsightsPage({
           />
 
           <div className="flex flex-wrap gap-2">
-            {(["openings", "trends", "mistakes", "profile"] as const).map((tab) => (
+            {(["openings", "mistakes", "profile"] as const).map((tab) => (
               <Button key={tab} variant={activeTab === tab ? "primary" : "secondary"} size="sm" onClick={() => setActiveTab(tab)}>
                 {tab[0].toUpperCase() + tab.slice(1)}
               </Button>
@@ -131,7 +125,6 @@ export function PlayerInsightsPage({
           </div>
 
           {activeTab === "openings" && <OpeningsTab insights={insights} />}
-          {activeTab === "trends" && <TrendsTab insights={insights} />}
           {activeTab === "mistakes" && <MistakesTab insights={insights} />}
           {activeTab === "profile" && <ProfileTab insights={insights} />}
         </>
@@ -212,57 +205,14 @@ function OpeningBar({ data, dataKey }: { data: OpeningInsight[]; dataKey: keyof 
   );
 }
 
-function TrendsTab({ insights }: { insights: PlayerInsights }) {
-  return (
-    <div className="grid gap-5 xl:grid-cols-2">
-      <ChartCard title="Accuracy over time">
-        <TrendLine data={insights.performance.trend_points} dataKey="accuracy" stroke={CHART_STROKE} />
-      </ChartCard>
-      <ChartCard title="Average CP loss over time">
-        <TrendLine data={insights.performance.trend_points} dataKey="cp_loss" stroke="#5f5f5f" />
-      </ChartCard>
-      <ChartCard title="Blunders over time">
-        <TrendLine data={insights.performance.trend_points} dataKey="blunders" stroke="#7a7a7a" />
-      </ChartCard>
-      <ChartCard title="Rating over time">
-        <TrendLine data={insights.performance.rating_points} dataKey="rating" stroke="#3f3f3f" />
-      </ChartCard>
-      <Card className="p-5 xl:col-span-2">
-        <h3 className="text-base font-medium">Trend notes</h3>
-        <div className="mt-3 flex flex-wrap gap-2">
-          {insights.performance.trend_notes.map((note) => <Badge key={note} tone="blue">{note}</Badge>)}
-        </div>
-      </Card>
-    </div>
-  );
-}
-
-function TrendLine({ data, dataKey, stroke }: { data: Array<Record<string, unknown>>; dataKey: string; stroke: string }) {
-  return (
-    <ResponsiveContainer width="100%" height={260}>
-      <LineChart data={data} margin={{ left: -20, right: 8, top: 8, bottom: 8 }}>
-        <CartesianGrid stroke={CHART_GRID} vertical={false} />
-        <XAxis dataKey="date" tick={{ fill: CHART_TEXT, fontSize: 10 }} minTickGap={48} interval="preserveStartEnd" />
-        <YAxis tick={{ fill: CHART_TEXT, fontSize: 11 }} axisLine={false} tickLine={false} />
-        <Tooltip contentStyle={TOOLTIP_STYLE} />
-        <Line type="monotone" dataKey={dataKey} stroke={stroke} strokeWidth={2} dot={false} />
-      </LineChart>
-    </ResponsiveContainer>
-  );
-}
-
 function MistakesTab({ insights }: { insights: PlayerInsights }) {
   return (
-    <div className="grid gap-5 xl:grid-cols-[1fr_0.8fr]">
-      <ChartCard title="Mistake category distribution">
-        <ResponsiveContainer width="100%" height={320}>
-          <PieChart>
-            <Pie data={insights.mistakes.categories} dataKey="count" nameKey="category" innerRadius={70} outerRadius={115} paddingAngle={3}>
-              {insights.mistakes.categories.map((_, index) => <Cell key={index} fill={PIE_COLORS[index % PIE_COLORS.length]} />)}
-            </Pie>
-            <Tooltip contentStyle={TOOLTIP_STYLE} />
-          </PieChart>
-        </ResponsiveContainer>
+    <div className="grid gap-5 xl:grid-cols-2">
+      <ChartCard title="Mistakes by game phase">
+        <MistakeBar data={insights.mistakes.by_phase} />
+      </ChartCard>
+      <ChartCard title="Mistake types">
+        <MistakeBar data={insights.mistakes.by_type.slice(0, 8)} />
       </ChartCard>
       <Card className="p-5">
         <h3 className="text-base font-medium">Recurring weaknesses</h3>
@@ -279,6 +229,31 @@ function MistakesTab({ insights }: { insights: PlayerInsights }) {
         </div>
       </Card>
     </div>
+  );
+}
+
+function MistakeBar({ data }: { data: Array<{ category: string; count: number; percentage: number }> }) {
+  const chartData = data.map((row) => ({ ...row, label: shortLabel(row.category) }));
+  const height = Math.max(240, chartData.length * 36 + 44);
+
+  return (
+    <ResponsiveContainer width="100%" height={height}>
+      <BarChart data={chartData} layout="vertical" margin={{ left: 12, right: 18, top: 8, bottom: 8 }}>
+        <CartesianGrid stroke={CHART_GRID} horizontal={false} />
+        <XAxis type="number" tick={{ fill: CHART_TEXT, fontSize: 11 }} axisLine={false} tickLine={false} allowDecimals={false} />
+        <YAxis
+          type="category"
+          dataKey="label"
+          width={138}
+          tick={{ fill: CHART_TEXT, fontSize: 10 }}
+          axisLine={false}
+          tickLine={false}
+          interval={0}
+        />
+        <Tooltip contentStyle={TOOLTIP_STYLE} />
+        <Bar dataKey="count" fill={CHART_STROKE} barSize={18} />
+      </BarChart>
+    </ResponsiveContainer>
   );
 }
 

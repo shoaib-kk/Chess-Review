@@ -1,5 +1,4 @@
 import type { GameSummary, MoveAnalysis, MoveClassification } from "../types";
-import { Badge } from "./ui/Badge";
 import { Card } from "./ui/Card";
 
 interface MoveListPanelProps {
@@ -24,11 +23,11 @@ const rowClasses: Record<MoveClassification, string> = {
   Blunder: "text-app-blunder hover:bg-app-blunder/10",
 };
 
-const badgeTone: Record<MoveClassification, "neutral" | "green" | "yellow" | "orange" | "red"> = {
-  Excellent: "neutral",
-  Inaccuracy: "yellow",
-  Mistake: "orange",
-  Blunder: "red",
+const badgeStyles: Record<MoveClassification, { backgroundColor: string; color: string }> = {
+  Excellent: { backgroundColor: "transparent", color: "inherit" },
+  Inaccuracy: { backgroundColor: "#eab308", color: "#0f172a" },
+  Mistake: { backgroundColor: "#f97316", color: "#ffffff" },
+  Blunder: { backgroundColor: "#ef4444", color: "#ffffff" },
 };
 
 function MoveButton({
@@ -46,7 +45,7 @@ function MoveButton({
 
   return (
     <button
-      className={`flex min-h-9 items-center justify-between gap-2 px-3 text-left font-mono text-sm transition ${
+      className={`flex min-h-9 items-center justify-start gap-1.5 px-3 text-left font-mono text-sm transition ${
         active
           ? "bg-app-accent/20 text-app-text"
           : rowClasses[move.classification]
@@ -55,9 +54,13 @@ function MoveButton({
     >
       <span className="truncate">{move.move_played}</span>
       {BADGES[move.classification] && (
-        <Badge tone={badgeTone[move.classification]} className="shrink-0 px-1.5 py-0 text-[10px]">
+        <span
+          className="inline-grid h-5 w-5 shrink-0 place-items-center rounded-full font-mono text-[9px] font-medium leading-none opacity-100"
+          style={badgeStyles[move.classification]}
+          aria-label={move.classification}
+        >
           {BADGES[move.classification]}
-        </Badge>
+        </span>
       )}
     </button>
   );

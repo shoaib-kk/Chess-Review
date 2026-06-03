@@ -15,6 +15,13 @@ const toneClasses = {
   red: "text-app-blunder",
 };
 
+const classificationSymbols: Record<MoveClassification, string> = {
+  Excellent: "!",
+  Inaccuracy: "?!",
+  Mistake: "?",
+  Blunder: "??",
+};
+
 export function Badge({ children, tone = "neutral", className = "" }: BadgeProps) {
   return (
     <span className={`inline-flex items-center text-xs font-medium ${toneClasses[tone]} ${className}`}>
@@ -33,5 +40,5 @@ export function ClassificationBadge({ classification }: { classification: MoveCl
           ? "orange"
           : "red";
 
-  return <Badge tone={tone}>{classification}</Badge>;
+  return <Badge tone={tone}>{`${classification} ${classificationSymbols[classification]}`}</Badge>;
 }

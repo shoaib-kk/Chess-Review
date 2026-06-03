@@ -170,6 +170,18 @@ def _mistake_categories(game: chess.pgn.Game | None, color: str | None, score: f
     return counts
 
 
+def _counter_rows(counter: Counter[str], ordered_labels: list[str] | None = None) -> list[dict[str, Any]]:
+    if ordered_labels is None:
+        items = counter.most_common()
+    else:
+        items = [(label, counter.get(label, 0)) for label in ordered_labels]
+    total = sum(count for _, count in items)
+    return [
+        {"category": category, "count": count, "percentage": _pct(count, total)}
+        for category, count in items
+    ]
+
+
 def _opening_rows(groups: dict[str, dict], total_games: int) -> list[dict[str, Any]]:
     rows = []
     for key, data in groups.items():
@@ -332,10 +344,11 @@ def get_player_insights(username: str, limit: int = 200, time_class: str | None 
         if color == "Black" and first == "d4" and response:
             d4_responses[response] += 1
 
-        mistake_counts.update(_mistake_categories(pgn_game, color, score, ply_count))
+        categories = _mistake_categories(pgn_game, color, score, ply_count)
+        mistake_counts.update(categories)
         phase = _phase_bucket(ply_count, score)
         if phase:
-            phase_losses[phase] += 1
+            phase_losses[phase] += sum(categories.values()) or 1
         if rating and raw.get("date"):
             rating_points.append({"date": raw["date"], "rating": rating})
 
@@ -345,11 +358,8 @@ def get_player_insights(username: str, limit: int = 200, time_class: str | None 
     white_openings = _opening_rows(white_groups, max(1, len(white_records)))
     black_openings = _opening_rows(black_groups, max(1, len(black_records)))
 
-    mistake_total = sum(mistake_counts.values())
-    mistake_rows = [
-        {"category": category, "count": count, "percentage": _pct(count, mistake_total)}
-        for category, count in mistake_counts.most_common()
-    ]
+    mistake_rows = _counter_rows(mistake_counts)
+    phase_rows = _counter_rows(phase_losses, ["Opening", "Middlegame", "Endgame"])
 
     strongest = max(white_openings + black_openings, key=lambda row: row["win_rate"], default=None)
     weakest = min(white_openings + black_openings, key=lambda row: row["win_rate"], default=None)
@@ -408,6 +418,8 @@ def get_player_insights(username: str, limit: int = 200, time_class: str | None 
         },
         "mistakes": {
             "categories": mistake_rows,
+            "by_phase": phase_rows,
+            "by_type": mistake_rows,
             "top_weaknesses": mistake_rows[:3],
         },
         "profile": {
