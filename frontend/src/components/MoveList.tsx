@@ -17,7 +17,7 @@ const BADGES: Record<MoveClassification, string> = {
 };
 
 const rowClasses: Record<MoveClassification, string> = {
-  Excellent: "text-slate-300 hover:bg-app-panelSecondary/50",
+  Excellent: "text-app-text hover:bg-app-panelSecondary/50",
   Inaccuracy: "text-app-warning hover:bg-app-warning/10",
   Mistake: "text-app-mistake hover:bg-app-mistake/10",
   Blunder: "text-app-blunder hover:bg-app-blunder/10",
@@ -25,9 +25,9 @@ const rowClasses: Record<MoveClassification, string> = {
 
 const badgeStyles: Record<MoveClassification, { backgroundColor: string; color: string }> = {
   Excellent: { backgroundColor: "transparent", color: "inherit" },
-  Inaccuracy: { backgroundColor: "#eab308", color: "#0f172a" },
-  Mistake: { backgroundColor: "#f97316", color: "#ffffff" },
-  Blunder: { backgroundColor: "#ef4444", color: "#ffffff" },
+  Inaccuracy: { backgroundColor: "#dcdcaa", color: "#1e1e1e" },
+  Mistake: { backgroundColor: "#ce9178", color: "#1e1e1e" },
+  Blunder: { backgroundColor: "#f14c4c", color: "#ffffff" },
 };
 
 function MoveButton({
@@ -88,7 +88,7 @@ export function MoveListPanel({ summary, currentIndex, onSelectMove, reviewMyMov
         <h2 className="mt-1 text-base font-medium text-app-text">{userColor ? `${userColor} moves` : "Move list"}</h2>
       </div>
       <div className="px-5 pb-4">
-        <div className="mb-2 grid grid-cols-[42px_1fr_1fr] gap-2 border-b border-app-border pb-2 px-1 text-[11px] font-medium uppercase tracking-[0.14em] text-app-muted">
+        <div className="mb-3 grid grid-cols-[42px_1fr_1fr] gap-2 px-1 pb-1 text-[11px] font-medium uppercase tracking-[0.14em] text-app-muted">
           <div />
           <div>White</div>
           <div>Black</div>
@@ -119,7 +119,7 @@ export function MoveListPanel({ summary, currentIndex, onSelectMove, reviewMyMov
   if (embedded) return <section>{content}</section>;
 
   return (
-    <Card className="overflow-hidden ring-1 ring-app-border/70">
+    <Card className="overflow-hidden">
       {content}
     </Card>
   );

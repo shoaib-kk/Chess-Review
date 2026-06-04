@@ -8,7 +8,7 @@ interface BadgeProps {
 
 const toneClasses = {
   neutral: "text-app-muted",
-  blue: "text-blue-300",
+  blue: "text-[#75beff]",
   green: "text-app-good",
   yellow: "text-app-warning",
   orange: "text-app-mistake",

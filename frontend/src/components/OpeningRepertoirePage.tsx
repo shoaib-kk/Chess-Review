@@ -15,6 +15,7 @@ import type {
   OpeningRepertoireRow,
   TimeClassFilter,
 } from "../types";
+import { openingFamily } from "../utils/openingFamilies";
 
 interface OpeningRepertoirePageProps {
   loading: boolean;
@@ -36,13 +37,13 @@ interface OpeningRepertoirePageProps {
 type TabKey = "white" | "black";
 
 const TABS: Array<{ key: TabKey; label: string }> = [
-  { key: "white", label: "White" },
-  { key: "black", label: "Black" },
+  { key: "white", label: "As White" },
+  { key: "black", label: "As Black" },
 ];
 
 const panel = "bg-app-panel";
 const input =
-  "h-11 w-full border-[0.5px] border-app-border bg-app-panel px-3 text-sm text-app-text outline-none placeholder:text-app-muted focus:border-app-text";
+  "h-11 w-full bg-app-panelSecondary px-3 text-sm text-app-text outline-none transition placeholder:text-app-muted focus:bg-[#3c3c3c]";
 
 function fmt(value: number | null | undefined, suffix = "") {
   return value === null || value === undefined ? "-" : `${value.toFixed(1)}${suffix}`;
@@ -69,8 +70,17 @@ export function OpeningRepertoirePage({
   onFetchRepertoire,
 }: OpeningRepertoirePageProps) {
   const [activeTab, setActiveTab] = useState<TabKey>("white");
+  const [openingSearch, setOpeningSearch] = useState("");
 
-  const openings = useMemo(() => (repertoire ? allRows(repertoire) : []), [repertoire]);
+  const grouped = useMemo(() => {
+    if (!repertoire) return null;
+    return {
+      white: groupRowsByFamily(repertoire.repertoire.white),
+      black: groupRowsByFamily(repertoire.repertoire.black),
+      all: groupRowsByFamily(allRows(repertoire)),
+    };
+  }, [repertoire]);
+  const openings = grouped?.all ?? [];
 
   async function fetchRepertoire() {
     if (!username.trim()) return;
@@ -80,7 +90,7 @@ export function OpeningRepertoirePage({
   return (
     <div className="grid gap-5">
       <section className={panel}>
-        <div className="border-b border-app-border px-5 py-5">
+        <div className="px-5 py-6">
           <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-app-muted">Opening-specific performance</p>
           <h2 className="mt-1 text-2xl font-medium text-app-text">Opening Repertoire</h2>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-app-muted">
@@ -96,7 +106,7 @@ export function OpeningRepertoirePage({
             <option value="blitz">Blitz</option>
             <option value="bullet">Bullet</option>
           </select>
-          <label className="flex h-11 items-center gap-2 border-[0.5px] border-app-border bg-app-panel px-3 text-sm text-app-muted">
+          <label className="flex h-11 items-center gap-2 bg-app-panelSecondary px-3 text-sm text-app-muted">
             <input type="checkbox" className="accent-app-accent" checked={ratedOnly} onChange={(event) => onRatedOnlyChange(event.target.checked)} />
             Rated only
           </label>
@@ -108,18 +118,26 @@ export function OpeningRepertoirePage({
 
       {repertoire ? (
         <>
-          <TopSummary repertoire={repertoire} />
-          <BestWorst repertoire={repertoire} />
-          <MostPlayedChart openings={openings} />
+          <TopSummary repertoire={repertoire} whiteRows={grouped?.white ?? []} blackRows={grouped?.black ?? []} />
+          <BestWorst rows={openings} />
+          <MostPlayedChart whiteRows={grouped?.white ?? []} blackRows={grouped?.black ?? []} />
           <section className={panel}>
-            <div className="flex flex-wrap gap-2 border-b border-app-border px-5 py-4">
-              {TABS.map((tab) => (
-                <PlainButton key={tab.key} active={activeTab === tab.key} small onClick={() => setActiveTab(tab.key)}>
-                  {tab.label}
-                </PlainButton>
-              ))}
+            <div className="grid gap-4 px-5 py-5 lg:grid-cols-[auto_1fr] lg:items-center">
+              <div className="flex flex-wrap gap-2">
+                {TABS.map((tab) => (
+                  <PlainButton key={tab.key} active={activeTab === tab.key} small onClick={() => setActiveTab(tab.key)}>
+                    {tab.label}
+                  </PlainButton>
+                ))}
+              </div>
+              <input
+                className={input}
+                value={openingSearch}
+                placeholder="Search openings to see win rate..."
+                onChange={(event) => setOpeningSearch(event.target.value)}
+              />
             </div>
-            <OpeningList title={TABS.find((tab) => tab.key === activeTab)?.label ?? "Openings"} rows={repertoire.repertoire[activeTab]} />
+            <OpeningList title={TABS.find((tab) => tab.key === activeTab)?.label ?? "Openings"} rows={grouped?.[activeTab] ?? []} search={openingSearch} />
           </section>
         </>
       ) : (
@@ -131,6 +149,84 @@ export function OpeningRepertoirePage({
   );
 }
 
+function groupRowsByFamily(rows: OpeningRepertoireRow[]) {
+  const groups = new Map<string, OpeningRepertoireRow>();
+
+  for (const row of rows) {
+    const family = openingFamily(row.opening_family, row.opening_name);
+    const existing = groups.get(family);
+
+    if (!existing) {
+      groups.set(family, {
+        ...row,
+        id: `${row.category}::${family}`,
+        opening_name: family,
+        opening_family: family,
+        variation: null,
+      });
+      continue;
+    }
+
+    const games = existing.games + row.games;
+    const wins = existing.wins + row.wins;
+    const losses = existing.losses + row.losses;
+    const draws = existing.draws + row.draws;
+
+    existing.games = games;
+    existing.frequency += row.frequency;
+    existing.wins = wins;
+    existing.losses = losses;
+    existing.draws = draws;
+    existing.win_rate = percent(wins, games);
+    existing.avg_accuracy = weightedAverage(existing.avg_accuracy, existing.games - row.games, row.avg_accuracy, row.games);
+    existing.avg_cp_loss = weightedAverage(existing.avg_cp_loss, existing.games - row.games, row.avg_cp_loss, row.games);
+    existing.avg_game_length = weightedAverage(existing.avg_game_length, existing.games - row.games, row.avg_game_length, row.games);
+    existing.variations = mergeVariations(existing.variations, row.variations, games);
+    existing.recent_games = [...existing.recent_games, ...row.recent_games].slice(0, 8);
+    existing.common_opponent_responses = [...existing.common_opponent_responses, ...row.common_opponent_responses];
+    existing.typical_results = mergeResults(existing.typical_results, row.typical_results, games);
+    existing.best_example_games = [...existing.best_example_games, ...row.best_example_games].slice(0, 5);
+    existing.worst_example_games = [...existing.worst_example_games, ...row.worst_example_games].slice(0, 5);
+  }
+
+  return [...groups.values()];
+}
+
+function percent(part: number, whole: number) {
+  return whole ? Math.round((part / whole) * 1000) / 10 : 0;
+}
+
+function weightedAverage(left: number | null, leftCount: number, right: number | null, rightCount: number) {
+  const total = (left === null ? 0 : leftCount) + (right === null ? 0 : rightCount);
+  if (!total) return null;
+  const value = ((left ?? 0) * (left === null ? 0 : leftCount) + (right ?? 0) * (right === null ? 0 : rightCount)) / total;
+  return Math.round(value * 10) / 10;
+}
+
+function mergeVariations(left: OpeningRepertoireRow["variations"], right: OpeningRepertoireRow["variations"], totalGames: number) {
+  const counts = new Map<string, { variation: string; games: number; eco: string }>();
+  for (const item of [...left, ...right]) {
+    const existing = counts.get(item.variation);
+    if (existing) existing.games += item.games;
+    else counts.set(item.variation, { variation: item.variation, games: item.games, eco: item.eco });
+  }
+  return [...counts.values()]
+    .sort((a, b) => b.games - a.games || a.variation.localeCompare(b.variation))
+    .map((item) => ({ ...item, frequency: percent(item.games, totalGames) }));
+}
+
+function mergeResults(left: OpeningRepertoireRow["typical_results"], right: OpeningRepertoireRow["typical_results"], totalGames: number) {
+  const counts = new Map<string, { result: OpeningRepertoireRow["typical_results"][number]["result"]; games: number }>();
+  for (const item of [...left, ...right]) {
+    const existing = counts.get(item.result);
+    if (existing) existing.games += item.games;
+    else counts.set(item.result, { result: item.result, games: item.games });
+  }
+  return [...counts.values()]
+    .sort((a, b) => b.games - a.games)
+    .map((item) => ({ ...item, frequency: percent(item.games, totalGames) }));
+}
+
 function PlainButton({
   children,
   active = false,
@@ -139,8 +235,8 @@ function PlainButton({
 }: React.ButtonHTMLAttributes<HTMLButtonElement> & { active?: boolean; small?: boolean }) {
   return (
     <button
-      className={`inline-flex items-center justify-center border-b bg-transparent px-3 text-sm font-medium text-app-text transition hover:bg-app-panelSecondary disabled:cursor-not-allowed disabled:text-app-muted ${
-        active ? "border-app-text" : "border-transparent"
+      className={`inline-flex items-center justify-center bg-transparent px-3 text-sm font-medium text-app-text transition hover:bg-app-panelSecondary disabled:cursor-not-allowed disabled:text-app-muted ${
+        active ? "bg-app-panelSecondary" : ""
       } ${small ? "h-8" : "h-11"}`}
       {...props}
     >
@@ -149,20 +245,16 @@ function PlainButton({
   );
 }
 
-function TopSummary({ repertoire }: { repertoire: OpeningRepertoire }) {
-  const white = [...repertoire.repertoire.white].sort((a, b) => b.games - a.games)[0] ?? null;
-  const black = [
-    ...repertoire.repertoire.black_vs_e4,
-    ...repertoire.repertoire.black_vs_d4,
-    ...repertoire.repertoire.black_vs_other,
-  ].sort((a, b) => b.games - a.games)[0] ?? null;
+function TopSummary({ repertoire, whiteRows, blackRows }: { repertoire: OpeningRepertoire; whiteRows: OpeningRepertoireRow[]; blackRows: OpeningRepertoireRow[] }) {
+  const white = [...whiteRows].sort((a, b) => b.games - a.games)[0] ?? null;
+  const black = [...blackRows].sort((a, b) => b.games - a.games)[0] ?? null;
 
   return (
     <section className={panel}>
       <div className="grid gap-5 px-5 py-5 md:grid-cols-3">
         <SummaryBlock label="Games Analyzed" primary={String(repertoire.summary.total_games)} />
-        <SummaryBlock label="Most Played White Opening" primary={white?.opening_name ?? "-"} secondary={white ? `${white.games} games` : undefined} />
-        <SummaryBlock label="Most Played Black Defence" primary={black?.opening_name ?? "-"} secondary={black ? `${black.games} games` : undefined} />
+        <SummaryBlock label="Most Played as White" primary={white?.opening_name ?? "-"} secondary={white ? `${white.games} games` : undefined} />
+        <SummaryBlock label="Most Played as Black" primary={black?.opening_name ?? "-"} secondary={black ? `${black.games} games` : undefined} />
       </div>
     </section>
   );
@@ -170,7 +262,7 @@ function TopSummary({ repertoire }: { repertoire: OpeningRepertoire }) {
 
 function SummaryBlock({ label, primary, secondary }: { label: string; primary: string; secondary?: string }) {
   return (
-    <div className="min-w-0 md:border-l md:border-app-border md:pl-5 first:md:border-l-0 first:md:pl-0">
+    <div className="min-w-0 md:pl-2 first:md:pl-0">
       <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-app-muted">{label}</p>
       <p className="mt-2 text-xl font-medium text-app-text">{primary}</p>
       {secondary && <p className="mt-1 font-mono text-sm text-app-muted">{secondary}</p>}
@@ -178,15 +270,9 @@ function SummaryBlock({ label, primary, secondary }: { label: string; primary: s
   );
 }
 
-function BestWorst({ repertoire }: { repertoire: OpeningRepertoire }) {
-  const best = (repertoire.recommendations.strongest_openings.length
-    ? repertoire.recommendations.strongest_openings
-    : repertoire.summary.strongest_opening ? [repertoire.summary.strongest_opening] : []
-  ).slice(0, 3);
-  const worst = (repertoire.recommendations.weakest_openings.length
-    ? repertoire.recommendations.weakest_openings
-    : repertoire.summary.weakest_opening ? [repertoire.summary.weakest_opening] : []
-  ).slice(0, 3);
+function BestWorst({ rows }: { rows: OpeningRepertoireRow[] }) {
+  const best = [...rows].sort((a, b) => b.win_rate - a.win_rate || b.games - a.games).slice(0, 3);
+  const worst = [...rows].sort((a, b) => a.win_rate - b.win_rate || b.games - a.games).slice(0, 3);
 
   return (
     <section className={panel}>
@@ -204,7 +290,7 @@ function OpeningInsightList({ title, marker, rows }: { title: string; marker: st
       <h3 className="text-[11px] font-medium uppercase tracking-[0.16em] text-app-muted">{title}</h3>
       <div className="mt-4 grid gap-3">
         {rows.length ? rows.map((row) => (
-          <div key={`${title}-${row.id}`} className="grid grid-cols-[28px_1fr] gap-3 border-b border-app-border/70 pb-3">
+          <div key={`${title}-${row.id}`} className="grid grid-cols-[28px_1fr] gap-3 pb-3">
             <span className="font-mono text-lg text-app-text">{marker}</span>
             <div className="min-w-0">
               <p className="text-base font-medium text-app-text">{row.opening_name}</p>
@@ -219,29 +305,43 @@ function OpeningInsightList({ title, marker, rows }: { title: string; marker: st
   );
 }
 
-function MostPlayedChart({ openings }: { openings: OpeningRepertoireRow[] }) {
-  const data = [...openings].sort((a, b) => b.games - a.games).slice(0, 10);
+function MostPlayedChart({ whiteRows, blackRows }: { whiteRows: OpeningRepertoireRow[]; blackRows: OpeningRepertoireRow[] }) {
+  const data = familyChartRows(whiteRows, blackRows).sort((a, b) => b.games - a.games || a.opening_name.localeCompare(b.opening_name)).slice(0, 10);
   const height = Math.max(320, data.length * 40 + 48);
 
   return (
     <section className={`${panel} px-5 py-5`}>
-      <h3 className="text-[11px] font-medium uppercase tracking-[0.16em] text-app-muted">Top 10 Most Played Openings</h3>
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <h3 className="text-[11px] font-medium uppercase tracking-[0.16em] text-app-muted">Top 10 Most Played Opening Families</h3>
+        <div className="flex gap-4 text-xs text-app-muted">
+          <span className="inline-flex items-center gap-2"><span className="inline-block h-2 w-2 bg-app-accent" />As White</span>
+          <span className="inline-flex items-center gap-2"><span className="inline-block h-2 w-2 bg-[#4b4b4b]" />As Black</span>
+        </div>
+      </div>
       <div className="mt-5">
         <ResponsiveContainer width="100%" height={height}>
           <BarChart data={data} layout="vertical" margin={{ left: 12, right: 28, top: 8, bottom: 8 }}>
-            <CartesianGrid stroke="#263244" horizontal={false} />
-            <XAxis type="number" tick={{ fill: "#94a3b8", fontSize: 11 }} axisLine={false} tickLine={false} allowDecimals={false} />
+            <CartesianGrid stroke="#343434" horizontal={false} />
+            <XAxis type="number" tick={{ fill: "#8a8a8a", fontSize: 11 }} axisLine={false} tickLine={false} allowDecimals={false} />
             <YAxis
               type="category"
               dataKey="opening_name"
               width={260}
-              tick={{ fill: "#f8fafc", fontSize: 12 }}
+              tick={{ fill: "#d4d4d4", fontSize: 12 }}
               axisLine={false}
               tickLine={false}
               interval={0}
             />
-            <Tooltip contentStyle={{ background: "#111827", border: "1px solid #263244", color: "#f8fafc" }} />
-            <Bar dataKey="games" fill="#3b82f6" barSize={22} />
+            <Tooltip
+              contentStyle={{ background: "#1f1f1f", border: "none", color: "#d4d4d4" }}
+              formatter={(value, name, props) => {
+                const payload = props.payload as { games: number };
+                if (name === "Total") return [`${value}`, "Total games"];
+                return [`${value}`, `${name} (${payload.games} total)`];
+              }}
+            />
+            <Bar dataKey="whiteGames" stackId="games" fill="#007acc" barSize={22} name="As White" />
+            <Bar dataKey="blackGames" stackId="games" fill="#4b4b4b" barSize={22} name="As Black" />
           </BarChart>
         </ResponsiveContainer>
       </div>
@@ -249,15 +349,58 @@ function MostPlayedChart({ openings }: { openings: OpeningRepertoireRow[] }) {
   );
 }
 
-function OpeningList({ title, rows }: { title: string; rows: OpeningRepertoireRow[] }) {
-  const sorted = [...rows].sort((a, b) => b.win_rate - a.win_rate || b.games - a.games || a.opening_name.localeCompare(b.opening_name));
+function familyChartRows(whiteRows: OpeningRepertoireRow[], blackRows: OpeningRepertoireRow[]) {
+  const groups = new Map<string, { opening_name: string; games: number; whiteGames: number; blackGames: number }>();
+
+  for (const row of whiteRows) {
+    const family = openingFamily(row.opening_family, row.opening_name);
+    const existing = groups.get(family);
+    if (existing) {
+      existing.games += row.games;
+      existing.whiteGames += row.games;
+    } else {
+      groups.set(family, { opening_name: family, games: row.games, whiteGames: row.games, blackGames: 0 });
+    }
+  }
+
+  for (const row of blackRows) {
+    const family = openingFamily(row.opening_family, row.opening_name);
+    const existing = groups.get(family);
+    if (existing) {
+      existing.games += row.games;
+      existing.blackGames += row.games;
+    } else {
+      groups.set(family, { opening_name: family, games: row.games, whiteGames: 0, blackGames: row.games });
+    }
+  }
+
+  return [...groups.values()];
+}
+
+function OpeningList({ title, rows, search }: { title: string; rows: OpeningRepertoireRow[]; search: string }) {
+  const query = search.trim().toLowerCase();
+  const filtered = query
+    ? rows.filter((row) =>
+        [
+          row.opening_name,
+          row.opening_family,
+          row.eco,
+          ...row.variations.map((item) => item.variation),
+        ].join(" ").toLowerCase().includes(query),
+      )
+    : rows;
+  const sorted = [...filtered].sort((a, b) => b.win_rate - a.win_rate || b.games - a.games || a.opening_name.localeCompare(b.opening_name));
 
   return (
     <div className="px-5 py-5">
       <h3 className="text-[11px] font-medium uppercase tracking-[0.16em] text-app-muted">{title} - Best Win Rates</h3>
       <div className="mt-4 grid gap-2">
         {sorted.map((row) => <OpeningRow key={row.id} row={row} />)}
-        {!sorted.length && <p className="text-sm text-app-muted">No openings in this category for the selected filters.</p>}
+        {!sorted.length && (
+          <p className="text-sm text-app-muted">
+            {query ? "No matching openings found for this side." : "No openings in this category for the selected filters."}
+          </p>
+        )}
       </div>
     </div>
   );
@@ -265,7 +408,7 @@ function OpeningList({ title, rows }: { title: string; rows: OpeningRepertoireRo
 
 function OpeningRow({ row }: { row: OpeningRepertoireRow }) {
   return (
-    <details className="group border-b border-app-border/70 py-4">
+    <details className="group py-5">
       <summary className="grid cursor-pointer list-none gap-3 md:grid-cols-[1fr_auto] md:items-start">
         <div className="min-w-0">
           <p className="text-base font-medium text-app-text">{row.opening_name}</p>

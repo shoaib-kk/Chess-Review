@@ -8,6 +8,7 @@ import {
 } from "recharts";
 import { Button } from "./ui/Button";
 import { Card, CardHeader } from "./ui/Card";
+import { openingFamily } from "../utils/openingFamilies";
 
 interface PlayerInsightsPageProps {
   loading: boolean;
@@ -30,24 +31,27 @@ function fmt(value: number | null | undefined, suffix = "") {
   return value === null || value === undefined ? "-" : `${value.toFixed(1)}${suffix}`;
 }
 
-function trendDirection(current: number | null | undefined, previous: number | null | undefined, lowerIsBetter = false) {
-  if (current === null || current === undefined || previous === null || previous === undefined) {
-    return { arrow: "->", label: "Not enough data" };
-  }
-  const delta = current - previous;
-  if (Math.abs(delta) < 1) return { arrow: "->", label: "Stable" };
-  const improving = lowerIsBetter ? delta < 0 : delta > 0;
-  return improving ? { arrow: "^", label: "Improving" } : { arrow: "v", label: "Needs attention" };
-}
-
 function topOpenings(insights: PlayerInsights) {
-  return [...insights.openings.as_white, ...insights.openings.as_black]
+  const groups = new Map<string, OpeningInsight>();
+
+  for (const row of [...insights.openings.as_white, ...insights.openings.as_black]) {
+    const family = openingFamily(row.opening_family, row.opening_name);
+    const existing = groups.get(family);
+    if (existing) {
+      existing.games += row.games;
+      existing.variations = [...existing.variations, ...row.variations];
+    } else {
+      groups.set(family, { ...row, opening_name: family, opening_family: family, variation: null });
+    }
+  }
+
+  return [...groups.values()]
     .sort((a, b) => b.games - a.games)
     .slice(0, 3);
 }
 
-const PIE_COLORS = ["#3b82f6", "#eab308", "#f97316", "#ef4444", "#64748b", "#22c55e", "#a855f7", "#14b8a6"];
-const TOOLTIP_STYLE = { background: "#111827", border: "1px solid #263244", borderRadius: 6, color: "#f8fafc" };
+const PIE_COLORS = ["#007acc", "#dcdcaa", "#ce9178", "#f14c4c", "#767676", "#89d185", "#b180d7", "#4ec9b0"];
+const TOOLTIP_STYLE = { background: "#1f1f1f", border: "none", borderRadius: 6, color: "#d4d4d4" };
 
 export function PlayerInsightsPage({
   loading,
@@ -75,13 +79,13 @@ export function PlayerInsightsPage({
         </CardHeader>
         <div className="grid gap-3 px-5 pb-5 lg:grid-cols-[1fr_120px_150px_auto_auto] lg:items-center">
           <input
-            className="h-11 border-[0.5px] border-app-border bg-app-panel px-3 text-app-text outline-none transition placeholder:text-app-muted focus:border-app-text"
+            className="h-11 bg-app-panelSecondary px-3 text-app-text outline-none transition placeholder:text-app-muted focus:bg-[#3c3c3c]"
             value={username}
             placeholder="Chess.com username"
             onChange={(event) => onUsernameChange(event.target.value)}
           />
           <input
-            className="h-11 border-[0.5px] border-app-border bg-app-panel px-3 text-app-text outline-none focus:border-app-text"
+            className="h-11 bg-app-panelSecondary px-3 text-app-text outline-none transition focus:bg-[#3c3c3c]"
             type="number"
             min={20}
             max={300}
@@ -89,7 +93,7 @@ export function PlayerInsightsPage({
             onChange={(event) => onLimitChange(Number(event.target.value))}
           />
           <select
-            className="h-11 border-[0.5px] border-app-border bg-app-panel px-3 text-app-text outline-none focus:border-app-text"
+            className="h-11 bg-app-panelSecondary px-3 text-app-text outline-none transition focus:bg-[#3c3c3c]"
             value={timeClass}
             onChange={(event) => onTimeClassChange(event.target.value as TimeClassFilter)}
           >
@@ -98,7 +102,7 @@ export function PlayerInsightsPage({
             <option value="blitz">Blitz</option>
             <option value="bullet">Bullet</option>
           </select>
-          <label className="flex h-11 items-center gap-2 border-[0.5px] border-app-border bg-app-panel px-3 text-sm text-app-muted">
+          <label className="flex h-11 items-center gap-2 bg-app-panelSecondary px-3 text-sm text-app-muted">
             <input type="checkbox" className="accent-app-accent" checked={ratedOnly} onChange={(event) => onRatedOnlyChange(event.target.checked)} />
             Rated only
           </label>
@@ -125,47 +129,25 @@ function EmptyState({ loading }: { loading: boolean }) {
 
 function InsightsReport({ insights }: { insights: PlayerInsights }) {
   const openings = topOpenings(insights);
-  const accuracyTrend = trendDirection(insights.performance.last_30.avg_accuracy, insights.performance.last_90.avg_accuracy);
-  const blunderTrend = trendDirection(insights.performance.last_30.blunders, insights.performance.last_90.blunders, true);
-  const winTrend = trendDirection(insights.performance.last_30.win_rate, insights.performance.last_90.win_rate);
-  const recommendations = insights.profile.recommendations.slice(0, 5);
 
   return (
     <section className="bg-app-panel">
-      <div className="grid gap-6 border-b border-app-border px-5 py-5 xl:grid-cols-[1fr_0.9fr]">
-        <div>
-          <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-app-muted">Summary</p>
-          <h2 className="mt-1 text-2xl font-medium text-app-text">Player Insights</h2>
-          <div className="mt-5 grid gap-4 sm:grid-cols-3">
-            <Metric label="Games" value={String(insights.summary.games_analyzed)} />
-            <Metric label="Win rate" value={fmt(insights.summary.win_rate, "%")} />
-            <Metric label="Accuracy" value={fmt(insights.summary.average_accuracy, "%")} />
-          </div>
-        </div>
-        <div className="border-t border-app-border pt-5 xl:border-l xl:border-t-0 xl:pl-6 xl:pt-0">
-          <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-app-muted">Recent trend</p>
-          <div className="mt-4 grid gap-3">
-            <TrendLine label="Accuracy" trend={accuracyTrend} />
-            <TrendLine label="Blunders" trend={blunderTrend} />
-            <TrendLine label="Win rate" trend={winTrend} />
-          </div>
+      <div className="px-5 py-6">
+        <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-app-muted">Summary</p>
+        <h2 className="mt-1 text-2xl font-medium text-app-text">Player Insights</h2>
+        <div className="mt-5 grid gap-4 sm:grid-cols-3">
+          <Metric label="Games" value={String(insights.summary.games_analyzed)} />
+          <Metric label="Win rate" value={fmt(insights.summary.win_rate, "%")} />
+          <Metric label="Accuracy" value={fmt(insights.summary.average_accuracy, "%")} />
         </div>
       </div>
 
-      <div className="grid gap-6 px-5 py-5 xl:grid-cols-3">
+      <div className="px-5 py-5">
         <InsightList title="Most Common Openings" rows={openings.map((row) => `${row.opening_name} - ${row.games} games`)} />
-        <InsightList title="Most Common Mistakes" rows={insights.mistakes.top_weaknesses.slice(0, 5).map((row) => `${row.category} - ${row.count}`)} />
-        <InsightList title="Recommendations" rows={recommendations.length ? recommendations : fallbackRecommendations(insights)} />
       </div>
 
-      <div className="grid gap-6 border-t border-app-border px-5 py-5 xl:grid-cols-2">
+      <div className="px-5 py-6">
         <MistakePie title="Where Mistakes Happen" data={insights.mistakes.by_phase} />
-        <MistakePie title="Mistake Types" data={insights.mistakes.by_type.slice(0, 6)} />
-      </div>
-
-      <div className="border-t border-app-border px-5 py-5">
-        <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-app-muted">Coach note</p>
-        <p className="mt-2 max-w-4xl text-sm leading-6 text-app-muted">{insights.profile.summary}</p>
       </div>
     </section>
   );
@@ -186,7 +168,15 @@ function MistakePie({ title, data }: { title: string; data: Array<{ category: st
                   <Cell key={row.category} fill={PIE_COLORS[index % PIE_COLORS.length]} />
                 ))}
               </Pie>
-              <Tooltip contentStyle={TOOLTIP_STYLE} labelStyle={{ color: "#f8fafc" }} itemStyle={{ color: "#f8fafc" }} />
+              <Tooltip
+                contentStyle={TOOLTIP_STYLE}
+                labelStyle={{ color: "#d4d4d4" }}
+                itemStyle={{ color: "#d4d4d4" }}
+                formatter={(_value, name, props) => {
+                  const percentage = Number(props.payload?.percentage ?? 0);
+                  return [`${Math.round(percentage)}%`, name];
+                }}
+              />
             </PieChart>
           </ResponsiveContainer>
           <div className="grid gap-2">
@@ -215,23 +205,13 @@ function Metric({ label, value }: { label: string; value: string }) {
   );
 }
 
-function TrendLine({ label, trend }: { label: string; trend: { arrow: string; label: string } }) {
-  return (
-    <div className="grid grid-cols-[90px_24px_1fr] items-center gap-2 text-sm">
-      <span className="text-app-muted">{label}</span>
-      <span className="font-mono text-app-text">{trend.arrow}</span>
-      <span className="font-medium text-app-text">{trend.label}</span>
-    </div>
-  );
-}
-
 function InsightList({ title, rows }: { title: string; rows: string[] }) {
   return (
     <div className="min-w-0">
       <h3 className="text-[11px] font-medium uppercase tracking-[0.16em] text-app-muted">{title}</h3>
       <ol className="mt-4 grid gap-3">
         {rows.slice(0, 5).map((row, index) => (
-          <li key={`${title}-${row}`} className="grid grid-cols-[24px_1fr] gap-3 border-b border-app-border/70 pb-3 text-sm">
+          <li key={`${title}-${row}`} className="grid grid-cols-[24px_1fr] gap-3 pb-2 text-sm">
             <span className="font-mono text-app-muted">{index + 1}.</span>
             <span className="min-w-0 text-app-text">{row}</span>
           </li>
@@ -239,14 +219,4 @@ function InsightList({ title, rows }: { title: string; rows: string[] }) {
       </ol>
     </div>
   );
-}
-
-function fallbackRecommendations(insights: PlayerInsights) {
-  const weakness = insights.profile.top_weakness;
-  const openings = topOpenings(insights).map((row: OpeningInsight) => row.opening_name);
-  return [
-    weakness ? `Review ${weakness.toLowerCase()}` : "Review tactical misses",
-    insights.profile.position_preference ? `Study ${insights.profile.position_preference.toLowerCase()} positions` : "Review model games",
-    openings[0] ? `Study ${openings[0]} structures` : "Build a repeatable opening plan",
-  ];
 }

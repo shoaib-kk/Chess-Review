@@ -19,10 +19,10 @@ const navItems = [
 
 export function Header({ apiStatus, activeMode, onModeChange, username, onLogout, onNewReview }: HeaderProps) {
   return (
-    <aside className="border-b-[0.5px] border-app-border bg-app-bg lg:fixed lg:inset-y-0 lg:left-0 lg:z-20 lg:w-60 lg:border-b-0 lg:border-r-[0.5px]">
-      <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-4 lg:h-full lg:px-4 lg:py-4">
+    <aside className="bg-app-bg lg:fixed lg:inset-y-0 lg:left-0 lg:z-20 lg:w-60">
+      <div className="mx-auto flex max-w-7xl flex-col gap-5 px-4 py-5 lg:h-full lg:px-4 lg:py-5">
         <div className="flex min-w-0 items-center gap-3">
-          <div className="grid h-8 w-8 shrink-0 place-items-center border-[0.5px] border-app-border text-xs font-medium text-app-text">
+          <div className="grid h-8 w-8 shrink-0 place-items-center bg-app-panelSecondary text-xs font-medium text-app-text">
             CR
           </div>
           <div className="min-w-0">

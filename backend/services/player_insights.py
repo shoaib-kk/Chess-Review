@@ -10,6 +10,8 @@ from typing import Any
 import chess
 import chess.pgn
 
+from opening_recognition import recognise_opening
+
 from .chesscom_client import get_recent_games
 from .opening_names import extract_opening_family, extract_variation
 
@@ -55,6 +57,9 @@ def _mainline(game: chess.pgn.Game | None) -> list[chess.Move]:
 def _opening_info(game: chess.pgn.Game | None) -> tuple[str, str]:
     if not game:
         return "Unknown", "?"
+    opening = recognise_opening(game)
+    if opening:
+        return opening.name, opening.eco or "?"
     headers = game.headers
     eco = headers.get("ECO", "?")
     opening = headers.get("Opening") or _slug_title(headers.get("ECOUrl"))

@@ -1,5 +1,7 @@
-import type { GameSummary, MoveClassification } from "../types";
+import { useEffect, useState } from "react";
+import type { GameSummary, MoveAnalysis, MoveClassification } from "../types";
 import { ClassificationBadge } from "./ui/Badge";
+import { Button } from "./ui/Button";
 import { Card } from "./ui/Card";
 
 interface AnalysisPanelProps {
@@ -9,17 +11,11 @@ interface AnalysisPanelProps {
 }
 
 const accentClasses: Record<MoveClassification, string> = {
-  Excellent: "border-app-good/60",
-  Inaccuracy: "border-app-warning/70",
-  Mistake: "border-app-mistake/80",
-  Blunder: "border-app-blunder/80",
+  Excellent: "bg-app-good/10",
+  Inaccuracy: "bg-app-warning/10",
+  Mistake: "bg-app-mistake/10",
+  Blunder: "bg-app-blunder/10",
 };
-
-function fmtEval(value: number | null): string {
-  if (value === null) return "-";
-  if (Math.abs(value) >= 100000) return value > 0 ? "Mate" : "-Mate";
-  return `${value > 0 ? "+" : ""}${(value / 100).toFixed(2)}`;
-}
 
 function coachCopy(classification: MoveClassification) {
   if (classification === "Excellent") return "Strong choice. The move stays close to the engine's preferred path.";
@@ -29,7 +25,12 @@ function coachCopy(classification: MoveClassification) {
 }
 
 export function AnalysisPanel({ summary, currentIndex, embedded = false }: AnalysisPanelProps) {
+  const [showBestLine, setShowBestLine] = useState(false);
   const move = currentIndex >= 0 ? summary.move_analyses[currentIndex] : undefined;
+
+  useEffect(() => {
+    setShowBestLine(false);
+  }, [currentIndex]);
 
   const content = (
     <>
@@ -44,7 +45,7 @@ export function AnalysisPanel({ summary, currentIndex, embedded = false }: Analy
             Select a move from the graph, board controls, or move list to see the engine review.
           </p>
         ) : (
-          <div className={`border-l-2 pl-4 ${accentClasses[move.classification]}`}>
+          <div className={`px-4 py-4 ${accentClasses[move.classification]}`}>
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div>
                 <p className="text-xs font-medium uppercase tracking-[0.14em] text-app-muted">Move played</p>
@@ -56,28 +57,20 @@ export function AnalysisPanel({ summary, currentIndex, embedded = false }: Analy
               <ClassificationBadge classification={move.classification} />
             </div>
 
-            <p className="mt-4 max-w-2xl text-sm leading-6 text-slate-300">{coachCopy(move.classification)}</p>
+            <p className="mt-4 max-w-2xl text-sm leading-6 text-app-text">{coachCopy(move.classification)}</p>
 
-            <div className="mt-4">
-              <CoachFact label="Best move" value={move.best_move ?? "-"} large />
+            <div className="mt-5">
+              <Button variant="secondary" size="sm" onClick={() => setShowBestLine((value) => !value)}>
+                {showBestLine ? "Hide best line" : "Show best line"}
+              </Button>
             </div>
 
-            <div className="mt-4 grid gap-3 sm:grid-cols-2">
-              <CoachFact label="Eval before" value={fmtEval(move.eval_before)} />
-              <CoachFact label="Eval after" value={fmtEval(move.eval_after)} />
-            </div>
-
-            <div className="mt-4 border-t border-app-border pt-4">
-              <p className="mb-2 text-xs font-medium uppercase tracking-[0.14em] text-app-muted">Principal variation</p>
-              <p className="min-h-8 font-mono text-sm leading-6 text-slate-300">
-                {move.pv.length ? move.pv.join(" ") : "No PV returned"}
-              </p>
-            </div>
+            {showBestLine && <BestLine move={move} />}
           </div>
         )}
 
         {summary.user_username && (
-          <div className="mt-4 grid gap-2 border-t border-app-border pt-4 text-sm sm:grid-cols-4">
+          <div className="mt-6 grid gap-4 pt-1 text-sm sm:grid-cols-4">
             <UserStat label="My inaccuracies" value={summary.user_inaccuracies} />
             <UserStat label="My mistakes" value={summary.user_mistakes} />
             <UserStat label="My blunders" value={summary.user_blunders} />
@@ -90,14 +83,28 @@ export function AnalysisPanel({ summary, currentIndex, embedded = false }: Analy
 
   if (embedded) return <section>{content}</section>;
 
-  return <Card className="overflow-hidden ring-1 ring-app-border/70">{content}</Card>;
+  return <Card className="overflow-hidden">{content}</Card>;
 }
 
-function CoachFact({ label, value, large = false }: { label: string; value: string; large?: boolean }) {
+function BestLine({ move }: { move: MoveAnalysis }) {
+  const line = move.pv.length ? move.pv : move.best_move ? [move.best_move] : [];
+  const bestMove = move.best_move ?? line[0] ?? "-";
+  const followUp = line[0] === bestMove ? line.slice(1) : line;
+
   return (
-    <div>
-      <div className="text-[11px] font-medium uppercase tracking-[0.14em] text-app-muted">{label}</div>
-      <div className={`mt-1 truncate font-mono font-medium text-app-text ${large ? "text-lg" : "text-sm"}`}>{value}</div>
+    <div className="mt-5 bg-app-panel/60 px-4 py-4">
+      <div className="grid gap-4 sm:grid-cols-[160px_1fr]">
+        <div>
+          <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-app-muted">Best move</p>
+          <p className="mt-1 font-mono text-lg font-medium text-app-text">{bestMove}</p>
+        </div>
+        <div>
+          <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-app-muted">Follow-up line</p>
+          <p className="mt-1 min-h-7 font-mono text-sm leading-6 text-app-text">
+            {followUp.length ? followUp.join(" ") : "No follow-up returned"}
+          </p>
+        </div>
+      </div>
     </div>
   );
 }

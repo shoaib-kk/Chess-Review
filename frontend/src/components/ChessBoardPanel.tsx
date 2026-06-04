@@ -27,9 +27,9 @@ const annotationSymbols: Record<MoveClassification, string> = {
 
 const annotationStyles: Record<MoveClassification, { backgroundColor: string; color: string }> = {
   Excellent: { backgroundColor: "transparent", color: "inherit" },
-  Inaccuracy: { backgroundColor: "#eab308", color: "#0f172a" },
-  Mistake: { backgroundColor: "#f97316", color: "#ffffff" },
-  Blunder: { backgroundColor: "#ef4444", color: "#ffffff" },
+  Inaccuracy: { backgroundColor: "#dcdcaa", color: "#1e1e1e" },
+  Mistake: { backgroundColor: "#ce9178", color: "#1e1e1e" },
+  Blunder: { backgroundColor: "#f14c4c", color: "#ffffff" },
 };
 
 function squareOverlayPosition(square: string, flipped: boolean) {
@@ -109,8 +109,8 @@ export function ChessboardPanel({
   const nextIndex = navigationIndexes.find((index) => index > moveIndex) ?? lastIndex;
 
   const arrows = [
-    played ? [played[0], played[1], "#3b82f6"] : null,
-    best && move?.best_move_uci !== move?.played_move_uci ? [best[0], best[1], "#22c55e"] : null,
+    played ? [played[0], played[1], "#007acc"] : null,
+    best && move?.best_move_uci !== move?.played_move_uci ? [best[0], best[1], "#89d185"] : null,
   ].filter(Boolean);
 
   const customSquareStyles = highlightedSquare
@@ -118,17 +118,17 @@ export function ChessboardPanel({
         [highlightedSquare]: {
           background:
             move?.classification === "Blunder"
-              ? "radial-gradient(circle, rgba(239,68,68,0.68) 0%, rgba(239,68,68,0.22) 72%)"
+              ? "radial-gradient(circle, rgba(241,76,76,0.68) 0%, rgba(241,76,76,0.22) 72%)"
               : move?.classification === "Mistake"
-                ? "radial-gradient(circle, rgba(249,115,22,0.68) 0%, rgba(249,115,22,0.22) 72%)"
-                : "radial-gradient(circle, rgba(234,179,8,0.68) 0%, rgba(234,179,8,0.2) 72%)",
+                ? "radial-gradient(circle, rgba(206,145,120,0.68) 0%, rgba(206,145,120,0.22) 72%)"
+                : "radial-gradient(circle, rgba(220,220,170,0.68) 0%, rgba(220,220,170,0.2) 72%)",
         },
       }
     : {};
 
   return (
-    <Card className="overflow-hidden ring-1 ring-app-border/70">
-      <div className="flex flex-col gap-3 border-b border-app-border/70 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+    <Card className="overflow-hidden">
+      <div className="flex flex-col gap-4 px-5 py-5 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
           <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-app-muted">Position</p>
           <div className="mt-1 flex flex-wrap items-center gap-3">
@@ -141,21 +141,21 @@ export function ChessboardPanel({
 
       <div className="px-4 pb-5 pt-5 sm:px-5">
         <div className="mx-auto grid max-w-[730px] grid-cols-[28px_minmax(0,680px)] gap-3">
-          <div className="relative overflow-hidden bg-slate-950 ring-1 ring-app-border" aria-label={`Evaluation ${evalLabel(currentEval)}`}>
-            <div className="absolute inset-x-0 bottom-0 bg-slate-100 transition-all duration-200" style={{ height: `${whitePercent}%` }} />
-            <div className="absolute inset-x-0 top-0 bg-slate-900 transition-all duration-200" style={{ height: `${100 - whitePercent}%` }} />
+          <div className="relative overflow-hidden bg-[#111111]" aria-label={`Evaluation ${evalLabel(currentEval)}`}>
+            <div className="absolute inset-x-0 bottom-0 bg-[#d4d4d4] transition-all duration-200" style={{ height: `${whitePercent}%` }} />
+            <div className="absolute inset-x-0 top-0 bg-[#1e1e1e] transition-all duration-200" style={{ height: `${100 - whitePercent}%` }} />
             {leader === "black" && (
-              <div className="absolute inset-x-0 top-1 text-center font-mono text-[10px] font-medium text-slate-100">
+              <div className="absolute inset-x-0 top-1 text-center font-mono text-[10px] font-medium text-[#d4d4d4]">
                 {evalLabel(currentEval)}
               </div>
             )}
             {leader === "white" && (
-              <div className="absolute inset-x-0 bottom-1 text-center font-mono text-[10px] font-medium text-slate-950">
+              <div className="absolute inset-x-0 bottom-1 text-center font-mono text-[10px] font-medium text-[#1e1e1e]">
                 {evalLabel(currentEval)}
               </div>
             )}
             {leader === "equal" && (
-              <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 text-center font-mono text-[10px] font-medium text-slate-100 mix-blend-difference">
+              <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 text-center font-mono text-[10px] font-medium text-[#d4d4d4] mix-blend-difference">
                 {evalLabel(currentEval)}
               </div>
             )}

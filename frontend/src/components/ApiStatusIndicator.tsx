@@ -3,9 +3,9 @@ interface ApiStatusIndicatorProps {
 }
 
 const dotColor: Record<ApiStatusIndicatorProps["status"], string> = {
-  checking: "#94a3b8",
-  ok: "#22c55e",
-  down: "#ef4444",
+  checking: "#858585",
+  ok: "#89d185",
+  down: "#f14c4c",
 };
 
 export function ApiStatusIndicator({ status }: ApiStatusIndicatorProps) {

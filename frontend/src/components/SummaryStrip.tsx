@@ -47,7 +47,7 @@ export function SummaryStrip({
     : summary.result;
 
   return (
-    <section className="flex min-h-[68px] flex-col justify-between gap-3 border-b border-app-border bg-app-bg pb-4 pt-1 sm:flex-row sm:items-end">
+    <section className="flex min-h-[68px] flex-col justify-between gap-4 bg-app-bg pb-6 pt-1 sm:flex-row sm:items-end">
       <div className="min-w-0">
         <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
           <h1 className="text-xl font-medium text-app-text">Chess Review</h1>

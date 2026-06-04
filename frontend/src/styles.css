@@ -10,8 +10,8 @@ body,
 
 body {
   margin: 0;
-  background: #0b1120;
-  color: #f8fafc;
+  background: #181818;
+  color: #d4d4d4;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
@@ -40,12 +40,40 @@ input {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #263244;
-  border: 3px solid #0b1120;
+  background: #343434;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #3b82f6;
+  background: #007acc;
+}
+
+.bg-app-bg {
+  background-color: #181818 !important;
+}
+
+.bg-app-panel {
+  background-color: #1f1f1f !important;
+}
+
+.bg-app-panelSecondary {
+  background-color: #2a2a2a !important;
+}
+
+.text-app-text {
+  color: #d4d4d4 !important;
+}
+
+.text-app-muted {
+  color: #8a8a8a !important;
+}
+
+.border-app-border {
+  border-color: #343434 !important;
+}
+
+.focus\:bg-\[\#3c3c3c\]:focus,
+.hover\:bg-\[\#3c3c3c\]:hover {
+  background-color: #343434 !important;
 }
 
 .chessboard-animated [data-piece] {

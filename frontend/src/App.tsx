@@ -293,7 +293,7 @@ export default function App() {
 
           <main className="mx-auto w-full max-w-7xl px-4 py-6 lg:ml-60 lg:px-6">
             {error && (
-              <div className="mb-5 border-[0.5px] border-app-border bg-app-panel px-4 py-3 text-sm text-app-text">
+              <div className="mb-6 bg-app-panel px-5 py-4 text-sm text-app-text">
                 {error}
               </div>
             )}
@@ -393,9 +393,9 @@ export default function App() {
                     />
                   </div>
 
-                  <section className="min-w-0 overflow-hidden bg-app-panel">
+                  <section className="min-w-0 overflow-hidden bg-app-panel py-2">
                     <EvalGraphPanel summary={summary} currentIndex={moveIndex} onSelectMove={setMoveIndex} embedded />
-                    <div className="border-t border-app-border" />
+                    <div className="h-4" />
                     <MoveListPanel
                       summary={summary}
                       currentIndex={moveIndex}
@@ -403,7 +403,7 @@ export default function App() {
                       reviewMyMovesOnly={reviewMyMovesOnly}
                       embedded
                     />
-                    <div className="border-t border-app-border" />
+                    <div className="h-4" />
                     <AnalysisPanel summary={summary} currentIndex={moveIndex} embedded />
                   </section>
                 </div>
@@ -437,9 +437,9 @@ function HomeLogin({
   return (
     <main className="mx-auto grid min-h-screen w-full max-w-5xl place-items-center px-4 py-8">
       <Card className="w-full max-w-xl overflow-hidden">
-        <div className="border-b border-app-border/70 px-6 py-5">
+        <div className="px-6 py-6">
           <div className="flex items-center gap-3">
-            <div className="grid h-11 w-11 shrink-0 place-items-center border-[0.5px] border-app-border text-sm font-medium text-app-text">
+            <div className="grid h-11 w-11 shrink-0 place-items-center bg-app-panelSecondary text-sm font-medium text-app-text">
               CR
             </div>
             <div>
@@ -452,7 +452,7 @@ function HomeLogin({
           <label className="grid gap-2">
             <span className="text-[11px] font-medium uppercase tracking-[0.18em] text-app-muted">Chess.com username</span>
             <input
-              className="h-12 border-[0.5px] border-app-border bg-app-panel px-3 text-app-text outline-none transition placeholder:text-[#9b9b9b] focus:border-app-text"
+              className="h-12 bg-app-panelSecondary px-3 text-app-text outline-none transition placeholder:text-[#9b9b9b] focus:bg-[#3c3c3c]"
               value={username}
               placeholder="e.g. hikaru"
               autoFocus
@@ -462,7 +462,7 @@ function HomeLogin({
           <Button variant="primary" disabled={!username.trim()} type="submit">
             Continue
           </Button>
-          <div className="flex items-center border-[0.5px] border-app-border bg-app-panel px-3 py-2">
+          <div className="flex items-center bg-app-panelSecondary px-3 py-3">
             <ApiStatusIndicator status={apiStatus} />
           </div>
         </form>

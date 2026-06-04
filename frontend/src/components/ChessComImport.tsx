@@ -66,7 +66,7 @@ export function ChessComImport({
       <div className="px-5 pb-5">
       <div className="flex flex-col gap-3 sm:flex-row">
         <input
-          className="h-11 flex-1 border-[0.5px] border-app-border bg-app-panel px-3 text-app-text outline-none transition placeholder:text-[#9b9b9b] focus:border-app-text"
+          className="h-11 flex-1 bg-app-panelSecondary px-3 text-app-text outline-none transition placeholder:text-[#9b9b9b] focus:bg-[#3c3c3c]"
           value={username}
           placeholder="Chess.com username"
           onChange={(event) => onUsernameChange(event.target.value)}
@@ -79,7 +79,7 @@ export function ChessComImport({
       {games.length > 0 && (
         <div className="mt-4 grid gap-3">
           <select
-            className="h-11 border-[0.5px] border-app-border bg-app-panel px-3 text-sm text-app-text outline-none transition focus:border-app-text"
+            className="h-11 bg-app-panelSecondary px-3 text-sm text-app-text outline-none transition focus:bg-[#3c3c3c]"
             value={selectedIndex}
             onChange={(event) => setSelectedIndex(Number(event.target.value))}
           >
@@ -94,7 +94,7 @@ export function ChessComImport({
           </select>
 
           {selectedGame && selectedMeta && (
-            <div className="border-[0.5px] border-app-border bg-app-panel p-4">
+            <div className="bg-app-panelSecondary p-5">
               <div className="mb-4 flex items-center justify-between gap-3">
                 <div>
                   <div className="text-sm font-medium text-app-text">{selectedMeta.color} vs {selectedMeta.opponent}</div>
@@ -113,12 +113,12 @@ export function ChessComImport({
                 <Meta label="Rated" value={selectedGame.rated ? "Rated" : "Unrated"} />
               </div>
               <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div className="flex flex-wrap items-center gap-2 border-b-[0.5px] border-app-border">
+                <div className="flex flex-wrap items-center gap-2">
                   {(["fast", "normal", "deep"] as AnalysisMode[]).map((item) => (
                     <button
                       key={item}
-                      className={`h-8 border-b-[1px] px-3 text-xs font-medium capitalize transition ${
-                        mode === item ? "border-app-text text-app-text" : "border-transparent text-app-muted hover:bg-app-panelSecondary hover:text-app-text"
+                      className={`h-8 px-3 text-xs font-medium capitalize transition ${
+                        mode === item ? "bg-app-panel text-app-text" : "text-app-muted hover:bg-app-panel hover:text-app-text"
                       }`}
                       onClick={() => onModeChange(item)}
                     >
