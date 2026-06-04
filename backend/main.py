@@ -30,6 +30,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:5173",
+        "https://your-vercel-app.vercel.app",
         "http://127.0.0.1:5173",
         "http://localhost:5174",
         "http://127.0.0.1:5174",
@@ -45,6 +46,11 @@ app.add_middleware(
 @app.get("/health", response_model=HealthResponse)
 def health() -> HealthResponse:
     return HealthResponse(status="ok")
+
+
+@app.get("/")
+def root_health() -> dict[str, str]:
+    return {"status": "ok"}
 
 
 @app.post("/analyze", response_model=GameSummaryResponse)

@@ -2,3 +2,4 @@ python-chess
 fastapi
 uvicorn[standard]
 pydantic
+requests
