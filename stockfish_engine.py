@@ -11,16 +11,17 @@ from pathlib import Path
 import chess
 import chess.engine
 
+STOCKFISH_PATH = os.getenv("STOCKFISH_PATH", "/usr/games/stockfish")
+
 
 def find_stockfish() -> str:
     project_dir = Path(__file__).resolve().parent
     local_stockfish_dir = project_dir / "stockfish"
     local_candidates = sorted(local_stockfish_dir.glob("stockfish*.exe"))
 
-    env_path = os.environ.get("STOCKFISH_PATH")
     candidates = [
+        STOCKFISH_PATH,
         *local_candidates,
-        env_path,
         shutil.which("stockfish"),
         shutil.which("stockfish.exe"),
         r"C:\Program Files\Stockfish\stockfish.exe",

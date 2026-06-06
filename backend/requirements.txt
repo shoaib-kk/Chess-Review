@@ -1,1 +1,5 @@
--r ../requirements.txt
+fastapi
+uvicorn[standard]
+python-chess
+requests
+pydantic
