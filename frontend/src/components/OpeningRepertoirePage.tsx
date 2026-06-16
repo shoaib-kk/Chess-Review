@@ -9,12 +9,24 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import {
+  ArrowLeft,
+  ArrowUpRight,
+  BookOpen,
+  ChevronRight,
+  CircleAlert,
+  Filter,
+  Search,
+  Trophy,
+} from "lucide-react";
 import type {
   OpeningGameExample,
   OpeningRepertoire,
   OpeningRepertoireRow,
   TimeClassFilter,
 } from "../types";
+import { Button } from "./ui/Button";
+import { Card, CardHeader } from "./ui/Card";
 import { openingFamily } from "../utils/openingFamilies";
 
 interface OpeningRepertoirePageProps {
@@ -41,9 +53,8 @@ const TABS: Array<{ key: TabKey; label: string }> = [
   { key: "black", label: "As Black" },
 ];
 
-const panel = "bg-app-panel";
 const input =
-  "h-11 w-full bg-app-panelSecondary px-3 text-sm text-app-text outline-none transition placeholder:text-app-muted focus:bg-[#3c3c3c]";
+  "h-11 w-full rounded-lg border border-app-border bg-app-panelSecondary px-3 text-sm text-app-text outline-none transition placeholder:text-app-muted focus-visible:border-app-accent focus-visible:ring-2 focus-visible:ring-app-accent/50";
 
 function fmt(value: number | null | undefined, suffix = "") {
   return value === null || value === undefined ? "-" : `${value.toFixed(1)}${suffix}`;
@@ -71,6 +82,7 @@ export function OpeningRepertoirePage({
 }: OpeningRepertoirePageProps) {
   const [activeTab, setActiveTab] = useState<TabKey>("white");
   const [openingSearch, setOpeningSearch] = useState("");
+  const [detailFamily, setDetailFamily] = useState<string | null>(null);
 
   const grouped = useMemo(() => {
     if (!repertoire) return null;
@@ -82,68 +94,89 @@ export function OpeningRepertoirePage({
   }, [repertoire]);
   const openings = grouped?.all ?? [];
 
+  const detailRow = detailFamily ? openings.find((row) => row.opening_name === detailFamily) ?? null : null;
+  const detailWhite = detailFamily && grouped ? grouped.white.find((row) => row.opening_name === detailFamily) ?? null : null;
+  const detailBlack = detailFamily && grouped ? grouped.black.find((row) => row.opening_name === detailFamily) ?? null : null;
+
   async function fetchRepertoire() {
     if (!username.trim()) return;
+    setDetailFamily(null);
     await onFetchRepertoire(username.trim(), { limit, time_class: timeClass, rated_only: ratedOnly });
   }
 
+  if (detailRow) {
+    return (
+      <div className="grid animate-fade-in gap-5">
+        <OpeningDetail row={detailRow} whiteRow={detailWhite} blackRow={detailBlack} onBack={() => setDetailFamily(null)} />
+      </div>
+    );
+  }
+
   return (
-    <div className="grid gap-5">
-      <section className={panel}>
-        <div className="px-5 py-6">
-          <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-app-muted">Opening-specific performance</p>
-          <h2 className="mt-1 text-2xl font-medium text-app-text">Opening Repertoire</h2>
-          <p className="mt-2 max-w-3xl text-sm leading-6 text-app-muted">
-            See which openings score best when you play White or Black.
-          </p>
-        </div>
-        <div className="grid gap-3 px-5 py-5 lg:grid-cols-[1fr_120px_150px_auto_auto] lg:items-center">
-          <input className={input} value={username} placeholder="Chess.com username" onChange={(event) => onUsernameChange(event.target.value)} />
-          <input className={input} type="number" min={20} max={500} value={limit} onChange={(event) => onLimitChange(Number(event.target.value))} />
+    <div className="grid animate-fade-in gap-5">
+      <Card>
+        <CardHeader title="Opening Repertoire" eyebrow="Opening-specific performance">
+          See which openings score best when you play White or Black.
+        </CardHeader>
+        <div className="grid gap-3 px-5 pb-5 pt-4 lg:grid-cols-[1fr_120px_150px_auto_auto] lg:items-center">
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-app-faint" />
+            <input className={`${input} pl-9`} value={username} placeholder="Chess.com username" onChange={(event) => onUsernameChange(event.target.value)} />
+          </div>
+          <input className={`${input} font-mono`} type="number" min={20} max={500} value={limit} onChange={(event) => onLimitChange(Number(event.target.value))} />
           <select className={input} value={timeClass} onChange={(event) => onTimeClassChange(event.target.value as TimeClassFilter)}>
             <option value="">All time controls</option>
             <option value="rapid">Rapid</option>
             <option value="blitz">Blitz</option>
             <option value="bullet">Bullet</option>
           </select>
-          <label className="flex h-11 items-center gap-2 bg-app-panelSecondary px-3 text-sm text-app-muted">
-            <input type="checkbox" className="accent-app-accent" checked={ratedOnly} onChange={(event) => onRatedOnlyChange(event.target.checked)} />
+          <label className="flex h-11 cursor-pointer items-center gap-2 rounded-lg border border-app-border bg-app-panelSecondary px-3 text-sm text-app-muted transition hover:bg-app-panelHover">
+            <input type="checkbox" className="h-4 w-4 accent-app-accent" checked={ratedOnly} onChange={(event) => onRatedOnlyChange(event.target.checked)} />
             Rated only
           </label>
-          <PlainButton disabled={!username.trim() || loading} onClick={fetchRepertoire}>
+          <Button variant="primary" disabled={!username.trim() || loading} onClick={fetchRepertoire}>
+            <Filter className="h-4 w-4" />
             {loading ? "Loading..." : "Refresh Repertoire"}
-          </PlainButton>
+          </Button>
         </div>
-      </section>
+      </Card>
 
       {repertoire ? (
         <>
           <TopSummary repertoire={repertoire} whiteRows={grouped?.white ?? []} blackRows={grouped?.black ?? []} />
           <BestWorst rows={openings} />
-          <MostPlayedChart whiteRows={grouped?.white ?? []} blackRows={grouped?.black ?? []} />
-          <section className={panel}>
-            <div className="grid gap-4 px-5 py-5 lg:grid-cols-[auto_1fr] lg:items-center">
-              <div className="flex flex-wrap gap-2">
+          <MostPlayedChart whiteRows={grouped?.white ?? []} blackRows={grouped?.black ?? []} onSelect={setDetailFamily} />
+          <Card>
+            <div className="grid gap-3 border-b border-app-border px-5 py-4 lg:grid-cols-[auto_1fr] lg:items-center">
+              <div className="inline-flex rounded-lg border border-app-border bg-app-panelSecondary/60 p-1">
                 {TABS.map((tab) => (
-                  <PlainButton key={tab.key} active={activeTab === tab.key} small onClick={() => setActiveTab(tab.key)}>
+                  <SegmentButton key={tab.key} active={activeTab === tab.key} onClick={() => setActiveTab(tab.key)}>
                     {tab.label}
-                  </PlainButton>
+                  </SegmentButton>
                 ))}
               </div>
-              <input
-                className={input}
-                value={openingSearch}
-                placeholder="Search openings to see win rate..."
-                onChange={(event) => setOpeningSearch(event.target.value)}
-              />
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-app-faint" />
+                <input
+                  className={`${input} pl-9`}
+                  value={openingSearch}
+                  placeholder="Search openings to see win rate..."
+                  onChange={(event) => setOpeningSearch(event.target.value)}
+                />
+              </div>
             </div>
             <OpeningList title={TABS.find((tab) => tab.key === activeTab)?.label ?? "Openings"} rows={grouped?.[activeTab] ?? []} search={openingSearch} />
-          </section>
+          </Card>
         </>
       ) : (
-        <section className={`${panel} p-5`}>
-          <p className="text-sm text-app-muted">{loading ? "Building your repertoire..." : "Enter a Chess.com username to build your opening repertoire."}</p>
-        </section>
+        <Card>
+          <div className="flex flex-col items-center gap-3 px-5 py-12 text-center">
+            <div className="grid h-11 w-11 place-items-center rounded-full bg-app-accentSoft text-app-accent">
+              <BookOpen className="h-5 w-5" />
+            </div>
+            <p className="text-sm text-app-muted">{loading ? "Building your repertoire..." : "Enter a Chess.com username to build your opening repertoire."}</p>
+          </div>
+        </Card>
       )}
     </div>
   );
@@ -227,17 +260,16 @@ function mergeResults(left: OpeningRepertoireRow["typical_results"], right: Open
     .map((item) => ({ ...item, frequency: percent(item.games, totalGames) }));
 }
 
-function PlainButton({
+function SegmentButton({
   children,
   active = false,
-  small = false,
   ...props
-}: React.ButtonHTMLAttributes<HTMLButtonElement> & { active?: boolean; small?: boolean }) {
+}: React.ButtonHTMLAttributes<HTMLButtonElement> & { active?: boolean }) {
   return (
     <button
-      className={`inline-flex items-center justify-center bg-transparent px-3 text-sm font-medium text-app-text transition hover:bg-app-panelSecondary disabled:cursor-not-allowed disabled:text-app-muted ${
-        active ? "bg-app-panelSecondary" : ""
-      } ${small ? "h-8" : "h-11"}`}
+      className={`inline-flex h-8 items-center justify-center rounded-md px-4 text-sm font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-app-accent/50 disabled:cursor-not-allowed ${
+        active ? "bg-app-accentSoft text-app-text" : "text-app-muted hover:text-app-text"
+      }`}
       {...props}
     >
       {children}
@@ -250,21 +282,19 @@ function TopSummary({ repertoire, whiteRows, blackRows }: { repertoire: OpeningR
   const black = [...blackRows].sort((a, b) => b.games - a.games)[0] ?? null;
 
   return (
-    <section className={panel}>
-      <div className="grid gap-5 px-5 py-5 md:grid-cols-3">
-        <SummaryBlock label="Games Analyzed" primary={String(repertoire.summary.total_games)} />
-        <SummaryBlock label="Most Played as White" primary={white?.opening_name ?? "-"} secondary={white ? `${white.games} games` : undefined} />
-        <SummaryBlock label="Most Played as Black" primary={black?.opening_name ?? "-"} secondary={black ? `${black.games} games` : undefined} />
-      </div>
-    </section>
+    <div className="grid gap-3 sm:grid-cols-3">
+      <SummaryBlock label="Games Analyzed" primary={String(repertoire.summary.total_games)} mono />
+      <SummaryBlock label="Most Played as White" primary={white?.opening_name ?? "-"} secondary={white ? `${white.games} games` : undefined} />
+      <SummaryBlock label="Most Played as Black" primary={black?.opening_name ?? "-"} secondary={black ? `${black.games} games` : undefined} />
+    </div>
   );
 }
 
-function SummaryBlock({ label, primary, secondary }: { label: string; primary: string; secondary?: string }) {
+function SummaryBlock({ label, primary, secondary, mono = false }: { label: string; primary: string; secondary?: string; mono?: boolean }) {
   return (
-    <div className="min-w-0 md:pl-2 first:md:pl-0">
-      <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-app-muted">{label}</p>
-      <p className="mt-2 text-xl font-medium text-app-text">{primary}</p>
+    <div className="min-w-0 rounded-xl border border-app-border bg-app-panel p-4 shadow-card">
+      <p className="text-xs font-medium uppercase tracking-wide text-app-muted">{label}</p>
+      <p className={`mt-2 truncate text-xl font-semibold text-app-text ${mono ? "font-mono" : ""}`}>{primary}</p>
       {secondary && <p className="mt-1 font-mono text-sm text-app-muted">{secondary}</p>}
     </div>
   );
@@ -275,77 +305,117 @@ function BestWorst({ rows }: { rows: OpeningRepertoireRow[] }) {
   const worst = [...rows].sort((a, b) => a.win_rate - b.win_rate || b.games - a.games).slice(0, 3);
 
   return (
-    <section className={panel}>
-      <div className="grid gap-6 px-5 py-5 xl:grid-cols-2">
-        <OpeningInsightList title="Best Performing Openings" marker="+" rows={best} />
-        <OpeningInsightList title="Needs Improvement" marker="!" rows={worst} />
-      </div>
-    </section>
-  );
-}
-
-function OpeningInsightList({ title, marker, rows }: { title: string; marker: string; rows: OpeningRepertoireRow[] }) {
-  return (
-    <div>
-      <h3 className="text-[11px] font-medium uppercase tracking-[0.16em] text-app-muted">{title}</h3>
-      <div className="mt-4 grid gap-3">
-        {rows.length ? rows.map((row) => (
-          <div key={`${title}-${row.id}`} className="grid grid-cols-[28px_1fr] gap-3 pb-3">
-            <span className="font-mono text-lg text-app-text">{marker}</span>
-            <div className="min-w-0">
-              <p className="text-base font-medium text-app-text">{row.opening_name}</p>
-              <p className="mt-1 font-mono text-sm text-app-muted">
-                {fmt(row.win_rate, "%")} Win Rate - {fmt(row.avg_accuracy)} Accuracy - {row.games} Games
-              </p>
-            </div>
-          </div>
-        )) : <p className="text-sm text-app-muted">More games are needed before this section is reliable.</p>}
-      </div>
+    <div className="grid gap-5 xl:grid-cols-2">
+      <Card>
+        <CardHeader title="Best Performing Openings" eyebrow="Strengths" />
+        <div className="px-5 py-5">
+          <OpeningInsightList tone="good" rows={best} />
+        </div>
+      </Card>
+      <Card>
+        <CardHeader title="Needs Improvement" eyebrow="Study priorities" />
+        <div className="px-5 py-5">
+          <OpeningInsightList tone="blunder" rows={worst} />
+        </div>
+      </Card>
     </div>
   );
 }
 
-function MostPlayedChart({ whiteRows, blackRows }: { whiteRows: OpeningRepertoireRow[]; blackRows: OpeningRepertoireRow[] }) {
+function OpeningInsightList({ tone, rows }: { tone: "good" | "blunder"; rows: OpeningRepertoireRow[] }) {
+  if (!rows.length) {
+    return <p className="text-sm text-app-muted">More games are needed before this section is reliable.</p>;
+  }
+
+  const Icon = tone === "good" ? Trophy : CircleAlert;
+  const iconClass = tone === "good" ? "text-app-good" : "text-app-blunder";
+  const tintClass = tone === "good" ? "bg-app-good/10" : "bg-app-blunder/10";
+
+  return (
+    <div className="grid gap-3">
+      {rows.map((row) => (
+        <div
+          key={`${tone}-${row.id}`}
+          className="flex items-start gap-3 rounded-lg border border-app-border bg-app-panelSecondary/40 p-3"
+        >
+          <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-full ${tintClass} ${iconClass}`}>
+            <Icon className="h-4 w-4" />
+          </span>
+          <div className="min-w-0">
+            <p className="truncate text-sm font-medium text-app-text">{row.opening_name}</p>
+            <p className="mt-1 font-mono text-xs text-app-muted">
+              {fmt(row.win_rate, "%")} Win Rate - {fmt(row.avg_accuracy)} Accuracy - {row.games} Games
+            </p>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function MostPlayedChart({
+  whiteRows,
+  blackRows,
+  onSelect,
+}: {
+  whiteRows: OpeningRepertoireRow[];
+  blackRows: OpeningRepertoireRow[];
+  onSelect: (family: string) => void;
+}) {
   const data = familyChartRows(whiteRows, blackRows).sort((a, b) => b.games - a.games || a.opening_name.localeCompare(b.opening_name)).slice(0, 10);
   const height = Math.max(320, data.length * 40 + 48);
 
+  function handleChartClick(state: { activeLabel?: string; activePayload?: Array<{ payload?: { opening_name?: string } }> }) {
+    const family = state?.activeLabel ?? state?.activePayload?.[0]?.payload?.opening_name;
+    if (family) onSelect(String(family));
+  }
+
   return (
-    <section className={`${panel} px-5 py-5`}>
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <h3 className="text-[11px] font-medium uppercase tracking-[0.16em] text-app-muted">Top 10 Most Played Opening Families</h3>
-        <div className="flex gap-4 text-xs text-app-muted">
-          <span className="inline-flex items-center gap-2"><span className="inline-block h-2 w-2 bg-app-accent" />As White</span>
-          <span className="inline-flex items-center gap-2"><span className="inline-block h-2 w-2 bg-[#4b4b4b]" />As Black</span>
-        </div>
-      </div>
-      <div className="mt-5">
+    <Card>
+      <CardHeader
+        title="Top 10 Most Played Opening Families"
+        eyebrow="Distribution"
+        action={
+          <div className="flex gap-4 text-xs text-app-muted">
+            <span className="inline-flex items-center gap-2"><span className="inline-block h-2 w-2 rounded-full bg-app-accent" />As White</span>
+            <span className="inline-flex items-center gap-2"><span className="inline-block h-2 w-2 rounded-full bg-app-borderStrong" />As Black</span>
+          </div>
+        }
+      />
+      <div className="px-5 py-5">
+        <p className="mb-3 text-xs text-app-muted">Click a bar to open detailed stats for that opening family.</p>
+        <div className="cursor-pointer">
         <ResponsiveContainer width="100%" height={height}>
-          <BarChart data={data} layout="vertical" margin={{ left: 12, right: 28, top: 8, bottom: 8 }}>
-            <CartesianGrid stroke="#343434" horizontal={false} />
-            <XAxis type="number" tick={{ fill: "#8a8a8a", fontSize: 11 }} axisLine={false} tickLine={false} allowDecimals={false} />
+          <BarChart data={data} layout="vertical" margin={{ left: 12, right: 28, top: 8, bottom: 8 }} onClick={handleChartClick}>
+            <CartesianGrid stroke="#262a31" horizontal={false} />
+            <XAxis type="number" tick={{ fill: "#9aa0aa", fontSize: 11 }} axisLine={false} tickLine={false} allowDecimals={false} />
             <YAxis
               type="category"
               dataKey="opening_name"
               width={260}
-              tick={{ fill: "#d4d4d4", fontSize: 12 }}
+              tick={{ fill: "#e6e8ec", fontSize: 12 }}
               axisLine={false}
               tickLine={false}
               interval={0}
             />
             <Tooltip
-              contentStyle={{ background: "#1f1f1f", border: "none", color: "#d4d4d4" }}
+              cursor={{ fill: "rgba(99,102,241,0.08)" }}
+              contentStyle={{ background: "#16181d", border: "1px solid #262a31", borderRadius: 8, color: "#e6e8ec" }}
+              labelStyle={{ color: "#e6e8ec" }}
+              itemStyle={{ color: "#e6e8ec" }}
               formatter={(value, name, props) => {
                 const payload = props.payload as { games: number };
                 if (name === "Total") return [`${value}`, "Total games"];
                 return [`${value}`, `${name} (${payload.games} total)`];
               }}
             />
-            <Bar dataKey="whiteGames" stackId="games" fill="#007acc" barSize={22} name="As White" />
-            <Bar dataKey="blackGames" stackId="games" fill="#4b4b4b" barSize={22} name="As Black" />
+            <Bar dataKey="whiteGames" stackId="games" fill="#6366f1" barSize={22} name="As White" radius={[0, 0, 0, 0]} />
+            <Bar dataKey="blackGames" stackId="games" fill="#333a47" barSize={22} name="As Black" radius={[0, 4, 4, 0]} />
           </BarChart>
         </ResponsiveContainer>
+        </div>
       </div>
-    </section>
+    </Card>
   );
 }
 
@@ -393,34 +463,38 @@ function OpeningList({ title, rows, search }: { title: string; rows: OpeningRepe
 
   return (
     <div className="px-5 py-5">
-      <h3 className="text-[11px] font-medium uppercase tracking-[0.16em] text-app-muted">{title} - Best Win Rates</h3>
-      <div className="mt-4 grid gap-2">
-        {sorted.map((row) => <OpeningRow key={row.id} row={row} />)}
-        {!sorted.length && (
-          <p className="text-sm text-app-muted">
-            {query ? "No matching openings found for this side." : "No openings in this category for the selected filters."}
-          </p>
-        )}
-      </div>
+      <h3 className="text-xs font-semibold uppercase tracking-wide text-app-muted">{title} - Best Win Rates</h3>
+      {sorted.length ? (
+        <div className="mt-4 overflow-hidden rounded-lg border border-app-border divide-y divide-app-border">
+          {sorted.map((row) => <OpeningRow key={row.id} row={row} />)}
+        </div>
+      ) : (
+        <p className="mt-4 text-sm text-app-muted">
+          {query ? "No matching openings found for this side." : "No openings in this category for the selected filters."}
+        </p>
+      )}
     </div>
   );
 }
 
 function OpeningRow({ row }: { row: OpeningRepertoireRow }) {
   return (
-    <details className="group py-5">
-      <summary className="grid cursor-pointer list-none gap-3 md:grid-cols-[1fr_auto] md:items-start">
-        <div className="min-w-0">
-          <p className="text-base font-medium text-app-text">{row.opening_name}</p>
-          <p className="mt-1 text-sm text-app-muted">{row.eco}</p>
+    <details className="group transition open:bg-app-accentSoft hover:bg-app-panelSecondary/50 open:hover:bg-app-accentSoft">
+      <summary className="grid cursor-pointer list-none gap-3 px-4 py-4 md:grid-cols-[1fr_auto] md:items-center">
+        <div className="flex min-w-0 items-center gap-3">
+          <ChevronRight className="h-4 w-4 shrink-0 text-app-faint transition group-open:rotate-90" />
+          <div className="min-w-0">
+            <p className="truncate text-sm font-medium text-app-text">{row.opening_name}</p>
+            <p className="mt-0.5 font-mono text-xs text-app-muted">{row.eco}</p>
+          </div>
         </div>
-        <div className="grid grid-cols-2 gap-x-5 gap-y-2 font-mono text-sm text-app-text sm:grid-cols-3">
+        <div className="grid grid-cols-3 gap-x-5 gap-y-2 pl-7 font-mono text-sm text-app-text md:pl-0">
           <SmallMetric label="Games" value={String(row.games)} />
           <SmallMetric label="Win Rate" value={fmt(row.win_rate, "%")} />
           <SmallMetric label="Accuracy" value={fmt(row.avg_accuracy, "%")} />
         </div>
       </summary>
-      <div className="mt-4 grid gap-4 text-sm text-app-muted lg:grid-cols-4">
+      <div className="grid gap-4 border-t border-app-border px-4 py-4 text-sm text-app-muted lg:grid-cols-4">
         <DetailList title="Variations" rows={row.variations.map((item) => `${item.variation}: ${item.games} games (${item.frequency}%)`)} />
         <DetailList title="Typical results" rows={row.typical_results.map((item) => `${item.result}: ${item.games} games (${item.frequency}%)`)} />
         <GameList title="Best examples" rows={row.best_example_games} />
@@ -433,8 +507,8 @@ function OpeningRow({ row }: { row: OpeningRepertoireRow }) {
 function SmallMetric({ label, value }: { label: string; value: string }) {
   return (
     <div className="text-right">
-      <p className="text-[10px] uppercase tracking-[0.12em] text-app-muted">{label}</p>
-      <p className="mt-1">{value}</p>
+      <p className="text-[10px] font-medium uppercase tracking-wide text-app-muted">{label}</p>
+      <p className="mt-1 text-app-text">{value}</p>
     </div>
   );
 }
@@ -442,34 +516,143 @@ function SmallMetric({ label, value }: { label: string; value: string }) {
 function DetailList({ title, rows }: { title: string; rows: string[] }) {
   return (
     <div>
-      <p className="font-medium text-app-text">{title}</p>
-      <div className="mt-2 grid gap-1">
-        {rows.length ? rows.map((row) => <p key={row}>{row}</p>) : <p>No data yet.</p>}
+      {title && <p className="text-xs font-semibold uppercase tracking-wide text-app-faint">{title}</p>}
+      <div className={`grid gap-1 ${title ? "mt-2" : ""}`}>
+        {rows.length ? rows.map((row) => <p key={row} className="text-app-muted">{row}</p>) : <p className="text-app-faint">No data yet.</p>}
       </div>
     </div>
+  );
+}
+
+function WinLossBar({ wins, draws, losses, className = "h-3" }: { wins: number; draws: number; losses: number; className?: string }) {
+  const total = wins + draws + losses || 1;
+  const pct = (value: number) => `${(value / total) * 100}%`;
+  return (
+    <div className={`flex w-full overflow-hidden rounded-full bg-app-panelSecondary ring-1 ring-inset ring-app-border ${className}`}>
+      <div className="bg-app-good" style={{ width: pct(wins) }} title={`${wins} wins`} />
+      <div className="bg-app-borderStrong" style={{ width: pct(draws) }} title={`${draws} draws`} />
+      <div className="bg-app-blunder" style={{ width: pct(losses) }} title={`${losses} losses`} />
+    </div>
+  );
+}
+
+function ColorSplitRow({ label, row }: { label: string; row: OpeningRepertoireRow | null }) {
+  const side = label.replace(/^As /, "").toLowerCase();
+  return (
+    <div className="grid items-center gap-x-5 gap-y-2 py-3 sm:grid-cols-[5.5rem_auto_1fr] sm:gap-y-0">
+      <span className="text-sm font-medium text-app-text">{label}</span>
+      {row ? (
+        <>
+          <span className="font-mono text-sm font-semibold text-app-text sm:text-right">{fmt(row.win_rate, "%")}</span>
+          <div className="flex min-w-0 items-center gap-3">
+            <WinLossBar wins={row.wins} draws={row.draws} losses={row.losses} className="h-2 max-w-[180px] flex-1" />
+            <span className="shrink-0 font-mono text-xs text-app-muted">
+              <span className="text-app-good">{row.wins}W</span>
+              <span className="mx-1.5 text-app-faint">/</span>
+              <span className="text-app-muted">{row.draws}D</span>
+              <span className="mx-1.5 text-app-faint">/</span>
+              <span className="text-app-blunder">{row.losses}L</span>
+            </span>
+          </div>
+        </>
+      ) : (
+        <span className="text-sm text-app-faint sm:col-span-2">No games with this opening as {side}.</span>
+      )}
+    </div>
+  );
+}
+
+function OpeningDetail({
+  row,
+  whiteRow,
+  blackRow,
+  onBack,
+}: {
+  row: OpeningRepertoireRow;
+  whiteRow: OpeningRepertoireRow | null;
+  blackRow: OpeningRepertoireRow | null;
+  onBack: () => void;
+}) {
+  return (
+    <Card>
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-app-border px-5 py-4">
+        <div className="flex min-w-0 items-center gap-3">
+          <Button variant="ghost" size="sm" onClick={onBack}>
+            <ArrowLeft className="h-4 w-4" />
+            Back
+          </Button>
+          <div className="min-w-0">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-app-accent/80">Opening detail</p>
+            <h2 className="truncate text-lg font-semibold text-app-text">{row.opening_name}</h2>
+          </div>
+        </div>
+        <span className="rounded-full bg-app-panelSecondary px-3 py-1 font-mono text-xs text-app-muted ring-1 ring-inset ring-app-border">
+          {row.eco || "ECO —"}
+        </span>
+      </div>
+
+      <div className="px-5 py-6">
+        {/* Focal point: overall win/loss record */}
+        <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-2">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-app-muted">Win rate</p>
+            <p className="mt-1 font-mono text-5xl font-semibold leading-none text-app-text">{fmt(row.win_rate, "%")}</p>
+          </div>
+          <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1 font-mono text-sm">
+            <span className="text-app-good">{row.wins}W</span>
+            <span className="text-app-muted">{row.draws}D</span>
+            <span className="text-app-blunder">{row.losses}L</span>
+            <span className="text-app-faint">across {row.games} games</span>
+          </div>
+        </div>
+        <div className="mt-4">
+          <WinLossBar wins={row.wins} draws={row.draws} losses={row.losses} className="h-4" />
+        </div>
+      </div>
+
+      {/* Color split, shown inline */}
+      <div className="border-t border-app-border px-5 py-4">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-app-muted">By color</p>
+        <div className="mt-2 divide-y divide-app-border">
+          <ColorSplitRow label="As White" row={whiteRow} />
+          <ColorSplitRow label="As Black" row={blackRow} />
+        </div>
+      </div>
+
+      {/* Example games */}
+      <div className="border-t border-app-border px-5 py-5">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-app-muted">Example games</p>
+        <div className="mt-4 grid gap-5 lg:grid-cols-3">
+          <GameList title="Best examples" rows={row.best_example_games} />
+          <GameList title="Worst examples" rows={row.worst_example_games} />
+          <GameList title="Recent games" rows={row.recent_games} />
+        </div>
+      </div>
+    </Card>
   );
 }
 
 function GameList({ title, rows }: { title: string; rows: OpeningGameExample[] }) {
   return (
     <div>
-      <p className="font-medium text-app-text">{title}</p>
+      <p className="text-xs font-semibold uppercase tracking-wide text-app-faint">{title}</p>
       <div className="mt-2 grid gap-1">
         {rows.length ? rows.slice(0, 3).map((row, index) => (
           <GameLink key={`${title}-${row.url ?? index}`} row={row}>
             {row.date ?? "Unknown date"} vs {row.opponent} - {row.result}
           </GameLink>
-        )) : <p>No games available.</p>}
+        )) : <p className="text-app-faint">No games available.</p>}
       </div>
     </div>
   );
 }
 
 function GameLink({ row, children }: { row: OpeningGameExample; children: ReactNode }) {
-  if (!row.url) return <p>{children}</p>;
+  if (!row.url) return <p className="text-app-muted">{children}</p>;
   return (
-    <a className="transition hover:text-app-text" href={row.url} target="_blank" rel="noreferrer">
+    <a className="inline-flex items-center gap-1 text-app-muted transition hover:text-app-accent" href={row.url} target="_blank" rel="noreferrer">
       {children}
+      <ArrowUpRight className="h-3 w-3 shrink-0" />
     </a>
   );
 }

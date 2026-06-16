@@ -35,24 +35,6 @@ def _mode_config(mode: str, requested_depth: int) -> dict:
     }
 
 
-def _classification_counts(summary: GameSummary, color: str, classification) -> None:
-    if classification.value == "Inaccuracy":
-        if color == "White":
-            summary.white_inaccuracies += 1
-        else:
-            summary.black_inaccuracies += 1
-    elif classification.value == "Mistake":
-        if color == "White":
-            summary.white_mistakes += 1
-        else:
-            summary.black_mistakes += 1
-    elif classification.value == "Blunder":
-        if color == "White":
-            summary.white_blunders += 1
-        else:
-            summary.black_blunders += 1
-
-
 def analyze_pgn(
     pgn_text: str,
     engine_path: Optional[str] = None,
@@ -88,7 +70,6 @@ def analyze_pgn(
     )
 
     positions = list(iter_positions(game))
-    total = len(positions)
     config = _mode_config(mode, depth)
 
     boards: list[chess.Board] = []
@@ -104,6 +85,16 @@ def analyze_pgn(
 
     with StockfishEngine(path=engine_path, depth=depth) as engine:
         for idx, board in enumerate(boards):
+            if progress_cb:
+                # Fire before the (slow) engine call so the UI reflects the
+                # position being analysed now, not the one just finished.
+                if idx < len(positions):
+                    _, _, move_number, color, san = positions[idx]
+                    label = f"{move_number}{'.' if color == 'White' else '...'}{san}"
+                else:
+                    label = "final position"
+                progress_cb(idx + 1, len(boards), label)
+
             fen = board.fen()
             include_pv = idx < len(boards) - 1
             cached = analysis_cache.get(fen)
@@ -126,10 +117,6 @@ def analyze_pgn(
             position_results.append(cached)
 
         for idx, (board_before, _move, move_number, color, san) in enumerate(positions, 1):
-            if progress_cb:
-                label = f"{move_number}{'.' if color == 'White' else '...'}{san}"
-                progress_cb(idx, total, label)
-
             fen_before = board_before.fen()
             before = position_results[idx - 1]
             after = position_results[idx]
@@ -150,7 +137,7 @@ def analyze_pgn(
                 fen_before=fen_before,
             )
             summary.move_analyses.append(analysis)
-            _classification_counts(summary, color, classification)
+            summary.record_classification(color, classification)
 
     summary.total_moves = len(summary.move_analyses)
     return summary

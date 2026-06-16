@@ -37,7 +37,7 @@ The FastAPI layer reuses the existing PGN and Stockfish analysis code.
 
 ```powershell
 .\.venv\Scripts\Activate.ps1
-pip install -r backend\requirements.txt
+pip install -r requirements.txt
 uvicorn backend.main:app --reload
 ```
 

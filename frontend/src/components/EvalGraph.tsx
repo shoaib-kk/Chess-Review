@@ -19,10 +19,10 @@ interface EvalGraphPanelProps {
 }
 
 const COLORS: Record<MoveClassification, string> = {
-  Excellent: "#89d185",
-  Inaccuracy: "#dcdcaa",
-  Mistake: "#ce9178",
-  Blunder: "#f14c4c",
+  Excellent: "#34d399",
+  Inaccuracy: "#fbbf24",
+  Mistake: "#fb923c",
+  Blunder: "#f43f5e",
 };
 
 function clampEval(value: number | null): number {
@@ -41,8 +41,8 @@ export function EvalGraphPanel({ summary, currentIndex, onSelectMove, embedded =
   const content = (
     <>
       <div className="px-5 pb-2 pt-4">
-        <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-app-muted">Engine line</p>
-        <h2 className="mt-1 text-base font-medium text-app-text">Evaluation</h2>
+        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-app-accent/80">Engine line</p>
+        <h2 className="mt-1 text-base font-semibold text-app-text">Evaluation</h2>
       </div>
       <div className="h-48 px-3 pb-4">
         <ResponsiveContainer width="100%" height="100%">
@@ -54,27 +54,27 @@ export function EvalGraphPanel({ summary, currentIndex, onSelectMove, embedded =
               if (typeof index === "number") onSelectMove(index);
             }}
           >
-            <CartesianGrid stroke="#3c3c3c" strokeDasharray="3 6" vertical={false} />
-            <XAxis dataKey="index" tick={{ fill: "#858585", fontSize: 11 }} tickLine={false} axisLine={false} />
+            <CartesianGrid stroke="#262a33" strokeDasharray="3 6" vertical={false} />
+            <XAxis dataKey="index" tick={{ fill: "#8b93a1", fontSize: 11 }} tickLine={false} axisLine={false} />
             <YAxis
               domain={[-10, 10]}
               ticks={[-5, 0, 5]}
-              tick={{ fill: "#858585", fontSize: 11 }}
+              tick={{ fill: "#8b93a1", fontSize: 11 }}
               tickLine={false}
               axisLine={false}
             />
             <Tooltip
-              cursor={{ stroke: "#007acc", strokeWidth: 1, strokeDasharray: "4 4" }}
-              contentStyle={{ background: "#1f1f1f", border: "none", borderRadius: 6 }}
-              labelStyle={{ color: "#d4d4d4" }}
+              cursor={{ stroke: "#6366f1", strokeWidth: 1, strokeDasharray: "4 4" }}
+              contentStyle={{ background: "#16181d", border: "1px solid #262a33", borderRadius: 12 }}
+              labelStyle={{ color: "#e7e9ee" }}
               formatter={(value, _name, props) => [`${Number(value).toFixed(2)}`, props.payload.label]}
             />
-            <ReferenceLine y={0} stroke="#85858555" />
-            {currentIndex >= 0 && <ReferenceLine x={currentIndex} stroke="#007acc" strokeDasharray="4 4" />}
+            <ReferenceLine y={0} stroke="#8b93a155" />
+            {currentIndex >= 0 && <ReferenceLine x={currentIndex} stroke="#6366f1" strokeDasharray="4 4" />}
             <Line
               type="monotone"
               dataKey="eval"
-              stroke="#c6c6c6"
+              stroke="#6366f1"
               strokeWidth={2}
               dot={(props) => {
                 const payload = props.payload as { classification: MoveClassification; index: number };
@@ -85,13 +85,13 @@ export function EvalGraphPanel({ summary, currentIndex, onSelectMove, embedded =
                     cx={props.cx}
                     cy={props.cy}
                     r={important ? 5 : 2.5}
-                    fill={important ? COLORS[payload.classification] : "#767676"}
-                    stroke="#1e1e1e"
+                    fill={important ? COLORS[payload.classification] : "#5b6270"}
+                    stroke="#0e0f13"
                     strokeWidth={1}
                   />
                 );
               }}
-              activeDot={{ r: 7, fill: "#007acc", stroke: "#1e1e1e", strokeWidth: 2 }}
+              activeDot={{ r: 7, fill: "#6366f1", stroke: "#0e0f13", strokeWidth: 2 }}
             />
           </LineChart>
         </ResponsiveContainer>

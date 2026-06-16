@@ -3,9 +3,14 @@ import type {
   AnalyzePayload,
   ChessComAnalyzePayload,
   ChessComGame,
+  EngineMoveResponse,
   GameSummary,
   OpeningRepertoire,
   PlayerInsights,
+  PuzzleList,
+  PuzzleProgress,
+  PuzzleDifficultyFilter,
+  PuzzlePhaseFilter,
   TimeClassFilter,
 } from "../types";
 
@@ -64,11 +69,54 @@ export async function getHealth(): Promise<string> {
   return response.data.status;
 }
 
+export async function fetchPuzzles(
+  username: string,
+  params: { limit?: number; offset?: number; phase?: PuzzlePhaseFilter; difficulty?: PuzzleDifficultyFilter } = {},
+): Promise<PuzzleList> {
+  const response = await api.get<PuzzleList>(`/puzzles/${encodeURIComponent(username)}`, { params });
+  return response.data;
+}
+
+export async function fetchPuzzleProgress(username: string): Promise<PuzzleProgress> {
+  const response = await api.get<PuzzleProgress>(`/puzzles/${encodeURIComponent(username)}/progress`);
+  return response.data;
+}
+
+export async function triggerPuzzleAnalysis(username: string): Promise<void> {
+  await api.post(`/puzzles/${encodeURIComponent(username)}/analyze`);
+}
+
+export async function markPuzzleSolved(username: string, puzzleId: number): Promise<void> {
+  await api.post(`/puzzles/${encodeURIComponent(username)}/${puzzleId}/solved`);
+}
+
+export async function requestEngineMove(
+  fen: string,
+  opts: { depth?: number; skillLevel?: number } = {},
+): Promise<EngineMoveResponse> {
+  const response = await api.post<EngineMoveResponse>("/play/move", {
+    fen,
+    depth: opts.depth ?? 12,
+    skill_level: opts.skillLevel,
+  });
+  return response.data;
+}
+
 export function apiErrorMessage(error: unknown): string {
   if (axios.isAxiosError(error)) {
+    if (error.response?.status === 429) {
+      return "The app is doing a lot at once. Please wait a moment before trying again.";
+    }
     const detail = error.response?.data?.detail;
-    if (typeof detail === "string") return detail;
-    if (error.message) return error.message;
+    if (typeof detail === "string") {
+      if (/too many requests|rate limit/i.test(detail)) {
+        return "Too many requests for the moment. Give it a few seconds, then try again.";
+      }
+      if (/network|timeout|failed/i.test(detail)) return "That request did not finish. Please try again.";
+      return detail;
+    }
+    if (error.code === "ECONNABORTED") return "That took too long to finish. Please try again.";
+    if (error.message) return "The request could not be completed. Please try again.";
   }
   return error instanceof Error ? error.message : "Request failed";
 }

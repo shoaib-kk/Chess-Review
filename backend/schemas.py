@@ -7,7 +7,6 @@ class AnalyzeRequest(BaseModel):
     pgn: str = Field(..., min_length=1)
     depth: int = Field(default=16, ge=1, le=24)
     mode: Literal["fast", "normal", "deep"] = "normal"
-    stockfish_path: Optional[str] = None
 
 
 class MoveAnalysisResponse(BaseModel):
@@ -86,4 +85,19 @@ class ChessComAnalyzeRequest(BaseModel):
     pgn: str = Field(..., min_length=1)
     depth: int = Field(default=16, ge=1, le=24)
     mode: Literal["fast", "normal", "deep"] = "normal"
-    stockfish_path: Optional[str] = None
+
+
+class EngineMoveRequest(BaseModel):
+    fen: str = Field(..., min_length=1)
+    depth: int = Field(default=12, ge=1, le=20)
+    # Stockfish "Skill Level" (0 = weakest, 20 = full strength). None = uncapped.
+    skill_level: Optional[int] = Field(default=None, ge=0, le=20)
+
+
+class EngineMoveResponse(BaseModel):
+    best_move_san: Optional[str]
+    best_move_uci: Optional[str]
+    fen: str  # resulting FEN after the engine's move (unchanged if the game is over)
+    is_game_over: bool
+    is_check: bool
+    eval_cp: Optional[int] = None  # centipawns from the side-to-move POV, before the move

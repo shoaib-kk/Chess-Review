@@ -2,6 +2,54 @@ export type MoveClassification = "Excellent" | "Inaccuracy" | "Mistake" | "Blund
 export type AnalysisMode = "fast" | "normal" | "deep";
 export type TimeClassFilter = "rapid" | "blitz" | "bullet" | "";
 
+export interface Puzzle {
+  id: number;
+  game_url: string | null;
+  game_date: string | null;
+  move_number: number;
+  color: "White" | "Black";
+  fen: string;
+  played_move: string;
+  best_move: string;
+  best_move_uci: string | null;
+  pv: string[];
+  cp_loss: number;
+  classification: "Blunder" | "Mistake";
+  solved: boolean;
+}
+
+export interface PuzzleProgress {
+  analyzed: number;
+  total: number;
+  running: boolean;
+  puzzle_count: number;
+}
+
+export type PuzzlePhase = "opening" | "middlegame" | "endgame";
+export type PuzzlePhaseFilter = "all" | PuzzlePhase;
+export type PuzzleDifficultyFilter = "all" | "blunders" | "mistakes";
+
+export interface PuzzlePhaseCounts {
+  all: number;
+  opening: number;
+  middlegame: number;
+  endgame: number;
+}
+
+export interface PuzzleFilters {
+  phase?: PuzzlePhaseFilter;
+  difficulty?: PuzzleDifficultyFilter;
+}
+
+export interface PuzzleList {
+  username: string;
+  puzzles: Puzzle[];
+  total_puzzles: number;
+  analyzed_games: number;
+  phase_counts: PuzzlePhaseCounts;
+  progress: PuzzleProgress;
+}
+
 export interface MoveAnalysis {
   move_number: number;
   color: "White" | "Black";
@@ -57,7 +105,6 @@ export interface AnalyzePayload {
   pgn: string;
   depth: number;
   mode: AnalysisMode;
-  stockfish_path?: string;
 }
 
 export interface ChessComGame {
@@ -78,6 +125,15 @@ export interface ChessComGame {
 
 export interface ChessComAnalyzePayload extends AnalyzePayload {
   username: string;
+}
+
+export interface EngineMoveResponse {
+  best_move_san: string | null;
+  best_move_uci: string | null;
+  fen: string;
+  is_game_over: boolean;
+  is_check: boolean;
+  eval_cp: number | null;
 }
 
 export interface OpeningInsight {
@@ -106,6 +162,7 @@ export interface PlayerInsights {
     white_win_rate: number;
     black_win_rate: number;
     average_accuracy: number | null;
+    games_with_accuracy: number;
     average_cp_loss: number | null;
     average_game_length: number | null;
   };

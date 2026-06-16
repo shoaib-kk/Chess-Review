@@ -4,7 +4,7 @@ RUN apt-get update && apt-get install -y stockfish && rm -rf /var/lib/apt/lists/
 
 WORKDIR /app
 
-COPY backend/requirements.txt ./requirements.txt
+COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY backend ./backend
@@ -12,4 +12,4 @@ COPY game_analyzer.py models.py opening_recognition.py pgn_parser.py stockfish_e
 
 ENV STOCKFISH_PATH=/usr/games/stockfish
 
-CMD uvicorn backend.main:app --host 0.0.0.0 --port $PORT
+CMD uvicorn backend.main:app --host 0.0.0.0 --port ${PORT:-8001}

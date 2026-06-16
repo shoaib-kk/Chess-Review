@@ -35,21 +35,21 @@ export function AnalysisPanel({ summary, currentIndex, embedded = false }: Analy
   const content = (
     <>
       <div className="px-5 pb-2 pt-4">
-        <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-app-muted">Selected move</p>
-        <h2 className="mt-1 text-base font-medium text-app-text">Coach panel</h2>
+        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-app-accent/80">Selected move</p>
+        <h2 className="mt-1 text-base font-semibold text-app-text">Coach panel</h2>
       </div>
 
       <div className="px-5 pb-5">
         {!move ? (
-          <p className="py-5 text-sm text-app-muted">
+          <p className="rounded-lg border border-app-border bg-app-panelSecondary/40 px-4 py-5 text-sm text-app-muted">
             Select a move from the graph, board controls, or move list to see the engine review.
           </p>
         ) : (
-          <div className={`px-4 py-4 ${accentClasses[move.classification]}`}>
+          <div className={`rounded-lg border border-app-border px-4 py-4 ${accentClasses[move.classification]}`}>
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div>
-                <p className="text-xs font-medium uppercase tracking-[0.14em] text-app-muted">Move played</p>
-                <div className="mt-1 font-mono text-2xl font-medium text-app-text">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-app-muted">Move played</p>
+                <div className="mt-1 font-mono text-2xl font-semibold text-app-text">
                   {move.move_number}
                   {move.color === "White" ? "." : "..."} {move.move_played}
                 </div>
@@ -92,14 +92,14 @@ function BestLine({ move }: { move: MoveAnalysis }) {
   const followUp = line[0] === bestMove ? line.slice(1) : line;
 
   return (
-    <div className="mt-5 bg-app-panel/60 px-4 py-4">
+    <div className="mt-5 rounded-lg border border-app-border bg-app-panelSecondary/50 px-4 py-4">
       <div className="grid gap-4 sm:grid-cols-[160px_1fr]">
         <div>
-          <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-app-muted">Best move</p>
-          <p className="mt-1 font-mono text-lg font-medium text-app-text">{bestMove}</p>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-app-muted">Best move</p>
+          <p className="mt-1 font-mono text-lg font-semibold text-app-good">{bestMove}</p>
         </div>
         <div>
-          <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-app-muted">Follow-up line</p>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-app-muted">Follow-up line</p>
           <p className="mt-1 min-h-7 font-mono text-sm leading-6 text-app-text">
             {followUp.length ? followUp.join(" ") : "No follow-up returned"}
           </p>
@@ -111,9 +111,9 @@ function BestLine({ move }: { move: MoveAnalysis }) {
 
 function UserStat({ label, value }: { label: string; value: number | string | null }) {
   return (
-    <div>
-      <div className="text-xs text-app-muted">{label}</div>
-      <div className="mt-1 font-mono font-medium text-app-text">{value ?? "-"}</div>
+    <div className="rounded-lg border border-app-border bg-app-panelSecondary/40 px-3 py-2.5">
+      <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-app-muted">{label}</div>
+      <div className="mt-1 font-mono text-lg font-semibold text-app-text">{value ?? "-"}</div>
     </div>
   );
 }

@@ -2,6 +2,9 @@
 __pycache__/
 *.py[cod]
 
+# Claude Code guidance file
+CLAUDE.md
+
 # Local Stockfish engine binaries are large and machine-specific.
 stockfish/
 

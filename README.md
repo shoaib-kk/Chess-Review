@@ -82,3 +82,19 @@ Stop the stack:
 ```bash
 docker compose down
 ```
+
+## Deploying
+
+The backend **requires Stockfish to be on the host** (`STOCKFISH_PATH`, defaults to `/usr/games/stockfish`). Both Dockerfiles install it via `apt-get install stockfish`, so deploy the backend using one of those Dockerfiles — a generic Python buildpack (no Dockerfile) won't have Stockfish available and `/analyze` will fail.
+
+If the frontend and backend are hosted separately (e.g. frontend on Vercel, backend on Render/Fly/Railway):
+
+- Set `VITE_API_BASE_URL` to the backend's full HTTPS URL as a **build-time** env var for the frontend (see `frontend/.env.example`). Leaving it unset falls back to `http://127.0.0.1:8001`, which only works for local dev.
+- Serve the backend over HTTPS — an HTTPS frontend calling an HTTP backend gets blocked as mixed content.
+- Add the frontend's deployed origin to `allow_origins`/`allow_origin_regex` in `backend/main.py` if it isn't already covered (Vercel preview URLs matching `https://chess-review*.vercel.app` are allowed via regex).
+
+The root `Dockerfile` reads the listen port from `$PORT` (falls back to `8001` if unset), matching Render/Railway/Heroku-style platforms that inject `PORT`.
+
+`/analyze`, `/chesscom/analyze`, and the Chess.com lookup endpoints are rate-limited per IP (in-memory, per process) to protect the Stockfish-backed endpoints from being overwhelmed on small instances.
+
+In-memory caches (chess.com insights/repertoire, analysis results) are per-process with no persistence, so a restart or scale-to-zero clears them and the next request re-fetches/re-analyzes.

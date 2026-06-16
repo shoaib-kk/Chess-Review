@@ -17,7 +17,7 @@ const BADGES: Record<MoveClassification, string> = {
 };
 
 const rowClasses: Record<MoveClassification, string> = {
-  Excellent: "text-app-text hover:bg-app-panelSecondary/50",
+  Excellent: "text-app-text hover:bg-app-panelSecondary/60",
   Inaccuracy: "text-app-warning hover:bg-app-warning/10",
   Mistake: "text-app-mistake hover:bg-app-mistake/10",
   Blunder: "text-app-blunder hover:bg-app-blunder/10",
@@ -25,9 +25,9 @@ const rowClasses: Record<MoveClassification, string> = {
 
 const badgeStyles: Record<MoveClassification, { backgroundColor: string; color: string }> = {
   Excellent: { backgroundColor: "transparent", color: "inherit" },
-  Inaccuracy: { backgroundColor: "#dcdcaa", color: "#1e1e1e" },
-  Mistake: { backgroundColor: "#ce9178", color: "#1e1e1e" },
-  Blunder: { backgroundColor: "#f14c4c", color: "#ffffff" },
+  Inaccuracy: { backgroundColor: "#fbbf24", color: "#1e1e1e" },
+  Mistake: { backgroundColor: "#fb923c", color: "#1e1e1e" },
+  Blunder: { backgroundColor: "#f43f5e", color: "#ffffff" },
 };
 
 function MoveButton({
@@ -45,9 +45,9 @@ function MoveButton({
 
   return (
     <button
-      className={`flex min-h-9 items-center justify-start gap-1.5 px-3 text-left font-mono text-sm transition ${
+      className={`flex min-h-9 items-center justify-start gap-1.5 rounded-lg px-3 text-left font-mono text-sm transition ${
         active
-          ? "bg-app-accent/20 text-app-text"
+          ? "bg-app-accentSoft text-app-text ring-1 ring-inset ring-app-accent/30"
           : rowClasses[move.classification]
       }`}
       onClick={onClick}
@@ -84,11 +84,11 @@ export function MoveListPanel({ summary, currentIndex, onSelectMove, reviewMyMov
   const content = (
     <>
       <div className="px-5 pb-2 pt-4">
-        <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-app-muted">Notation</p>
-        <h2 className="mt-1 text-base font-medium text-app-text">{userColor ? `${userColor} moves` : "Move list"}</h2>
+        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-app-accent/80">Notation</p>
+        <h2 className="mt-1 text-base font-semibold text-app-text">{userColor ? `${userColor} moves` : "Move list"}</h2>
       </div>
       <div className="px-5 pb-4">
-        <div className="mb-3 grid grid-cols-[42px_1fr_1fr] gap-2 px-1 pb-1 text-[11px] font-medium uppercase tracking-[0.14em] text-app-muted">
+        <div className="mb-3 grid grid-cols-[42px_1fr_1fr] gap-2 border-b border-app-border px-1 pb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-app-muted">
           <div />
           <div>White</div>
           <div>Black</div>

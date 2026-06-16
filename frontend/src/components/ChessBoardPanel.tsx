@@ -1,5 +1,8 @@
+import { useState } from "react";
 import { Chessboard } from "react-chessboard";
+import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, FlipVertical2, Swords } from "lucide-react";
 import type { GameSummary, MoveAnalysis, MoveClassification } from "../types";
+import { ExploreBoard } from "./ExploreBoard";
 import { ClassificationBadge } from "./ui/Badge";
 import { Button } from "./ui/Button";
 import { Card } from "./ui/Card";
@@ -27,9 +30,9 @@ const annotationSymbols: Record<MoveClassification, string> = {
 
 const annotationStyles: Record<MoveClassification, { backgroundColor: string; color: string }> = {
   Excellent: { backgroundColor: "transparent", color: "inherit" },
-  Inaccuracy: { backgroundColor: "#dcdcaa", color: "#1e1e1e" },
-  Mistake: { backgroundColor: "#ce9178", color: "#1e1e1e" },
-  Blunder: { backgroundColor: "#f14c4c", color: "#ffffff" },
+  Inaccuracy: { backgroundColor: "#fbbf24", color: "#1e1e1e" },
+  Mistake: { backgroundColor: "#fb923c", color: "#1e1e1e" },
+  Blunder: { backgroundColor: "#f43f5e", color: "#ffffff" },
 };
 
 function squareOverlayPosition(square: string, flipped: boolean) {
@@ -86,8 +89,22 @@ export function ChessboardPanel({
   onFlip,
   onMoveIndexChange,
 }: ChessboardPanelProps) {
+  const [exploreFen, setExploreFen] = useState<string | null>(null);
+
   const move = moveIndex >= 0 ? summary.move_analyses[moveIndex] : undefined;
   const position = move?.fen_after ?? summary.initial_fen;
+
+  if (exploreFen) {
+    return (
+      <ExploreBoard
+        fen={exploreFen}
+        orientation={flipped ? "black" : "white"}
+        onExit={() => setExploreFen(null)}
+        title={`Play out · from ${moveLabel(move)}`}
+      />
+    );
+  }
+
   const currentEval = evalWhitePov(move);
   const whitePercent = evalBarPercent(currentEval);
   const leader = evalLeader(currentEval);
@@ -109,8 +126,8 @@ export function ChessboardPanel({
   const nextIndex = navigationIndexes.find((index) => index > moveIndex) ?? lastIndex;
 
   const arrows = [
-    played ? [played[0], played[1], "#007acc"] : null,
-    best && move?.best_move_uci !== move?.played_move_uci ? [best[0], best[1], "#89d185"] : null,
+    played ? [played[0], played[1], "#6366f1"] : null,
+    best && move?.best_move_uci !== move?.played_move_uci ? [best[0], best[1], "#34d399"] : null,
   ].filter(Boolean);
 
   const customSquareStyles = highlightedSquare
@@ -118,44 +135,53 @@ export function ChessboardPanel({
         [highlightedSquare]: {
           background:
             move?.classification === "Blunder"
-              ? "radial-gradient(circle, rgba(241,76,76,0.68) 0%, rgba(241,76,76,0.22) 72%)"
+              ? "radial-gradient(circle, rgba(244,63,94,0.68) 0%, rgba(244,63,94,0.22) 72%)"
               : move?.classification === "Mistake"
-                ? "radial-gradient(circle, rgba(206,145,120,0.68) 0%, rgba(206,145,120,0.22) 72%)"
-                : "radial-gradient(circle, rgba(220,220,170,0.68) 0%, rgba(220,220,170,0.2) 72%)",
+                ? "radial-gradient(circle, rgba(251,146,60,0.68) 0%, rgba(251,146,60,0.22) 72%)"
+                : "radial-gradient(circle, rgba(251,191,36,0.68) 0%, rgba(251,191,36,0.2) 72%)",
         },
       }
     : {};
 
   return (
     <Card className="overflow-hidden">
-      <div className="flex flex-col gap-4 px-5 py-5 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-4 border-b border-app-border px-5 py-5 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
-          <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-app-muted">Position</p>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-app-accent/80">Position</p>
           <div className="mt-1 flex flex-wrap items-center gap-3">
-            <span className="font-mono text-2xl font-medium text-app-text">{moveLabel(move)}</span>
+            <span className="font-mono text-2xl font-semibold text-app-text">{moveLabel(move)}</span>
             {move && <ClassificationBadge classification={move.classification} />}
           </div>
         </div>
-        <Button variant="ghost" size="sm" onClick={onFlip}>Flip board</Button>
+        <div className="flex items-center gap-2">
+          <Button variant="secondary" size="sm" onClick={() => setExploreFen(position)}>
+            <Swords className="h-4 w-4" />
+            Play from here
+          </Button>
+          <Button variant="ghost" size="sm" onClick={onFlip}>
+            <FlipVertical2 className="h-4 w-4" />
+            Flip board
+          </Button>
+        </div>
       </div>
 
       <div className="px-4 pb-5 pt-5 sm:px-5">
         <div className="mx-auto grid max-w-[730px] grid-cols-[28px_minmax(0,680px)] gap-3">
-          <div className="relative overflow-hidden bg-[#111111]" aria-label={`Evaluation ${evalLabel(currentEval)}`}>
-            <div className="absolute inset-x-0 bottom-0 bg-[#d4d4d4] transition-all duration-200" style={{ height: `${whitePercent}%` }} />
-            <div className="absolute inset-x-0 top-0 bg-[#1e1e1e] transition-all duration-200" style={{ height: `${100 - whitePercent}%` }} />
+          <div className="relative overflow-hidden rounded-lg border border-app-border bg-[#111111]" aria-label={`Evaluation ${evalLabel(currentEval)}`}>
+            <div className="absolute inset-x-0 bottom-0 bg-[#e6e6e6] transition-all duration-200" style={{ height: `${whitePercent}%` }} />
+            <div className="absolute inset-x-0 top-0 bg-[#15161b] transition-all duration-200" style={{ height: `${100 - whitePercent}%` }} />
             {leader === "black" && (
-              <div className="absolute inset-x-0 top-1 text-center font-mono text-[10px] font-medium text-[#d4d4d4]">
+              <div className="absolute inset-x-0 top-1 text-center font-mono text-[10px] font-semibold text-[#e6e6e6]">
                 {evalLabel(currentEval)}
               </div>
             )}
             {leader === "white" && (
-              <div className="absolute inset-x-0 bottom-1 text-center font-mono text-[10px] font-medium text-[#1e1e1e]">
+              <div className="absolute inset-x-0 bottom-1 text-center font-mono text-[10px] font-semibold text-[#15161b]">
                 {evalLabel(currentEval)}
               </div>
             )}
             {leader === "equal" && (
-              <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 text-center font-mono text-[10px] font-medium text-[#d4d4d4] mix-blend-difference">
+              <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 text-center font-mono text-[10px] font-semibold text-[#e6e6e6] mix-blend-difference">
                 {evalLabel(currentEval)}
               </div>
             )}
@@ -192,7 +218,7 @@ export function ChessboardPanel({
 
         <div className="mt-4 grid grid-cols-[1fr_1fr_minmax(74px,0.8fr)_1fr_1fr] gap-2">
           <Button variant="control" size="sm" onClick={() => onMoveIndexChange(firstIndex)} aria-label="First move">
-            First
+            <ChevronsLeft className="h-4 w-4" />
           </Button>
           <Button
             variant="control"
@@ -200,9 +226,9 @@ export function ChessboardPanel({
             onClick={() => onMoveIndexChange(reviewMyMovesOnly ? previousIndex : Math.max(-1, moveIndex - 1))}
             aria-label="Previous move"
           >
-            Prev
+            <ChevronLeft className="h-4 w-4" />
           </Button>
-          <div className="grid h-9 place-items-center bg-app-panelSecondary px-2 font-mono text-xs text-app-muted">
+          <div className="grid h-9 place-items-center rounded-lg border border-app-border bg-app-panelSecondary px-2 font-mono text-xs text-app-muted">
             {moveIndex + 1}/{summary.total_moves}
           </div>
           <Button
@@ -211,10 +237,10 @@ export function ChessboardPanel({
             onClick={() => onMoveIndexChange(reviewMyMovesOnly ? nextIndex : Math.min(summary.total_moves - 1, moveIndex + 1))}
             aria-label="Next move"
           >
-            Next
+            <ChevronRight className="h-4 w-4" />
           </Button>
           <Button variant="control" size="sm" onClick={() => onMoveIndexChange(lastIndex)} aria-label="Last move">
-            Last
+            <ChevronsRight className="h-4 w-4" />
           </Button>
         </div>
       </div>

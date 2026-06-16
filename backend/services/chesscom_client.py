@@ -47,11 +47,17 @@ def _clean_game(game: dict[str, Any]) -> dict[str, Any] | None:
     if not pgn or not white.get("username") or not black.get("username"):
         return None
 
+    # Chess.com only includes `accuracies` for games that were analysed via
+    # Game Review, so these are real per-game accuracies (or absent).
+    accuracies = game.get("accuracies") or {}
+
     return {
         "white_username": white.get("username", ""),
         "black_username": black.get("username", ""),
         "white_result": white.get("result"),
         "black_result": black.get("result"),
+        "white_accuracy": accuracies.get("white"),
+        "black_accuracy": accuracies.get("black"),
         "result": game.get("result") or _result_from_player_results(white.get("result"), black.get("result")),
         "end_time": game.get("end_time"),
         "date": _format_date(game.get("end_time")),

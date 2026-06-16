@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import io
 from collections import Counter
-from functools import lru_cache
 from statistics import mean
 from typing import Any
 
@@ -10,6 +9,7 @@ import chess.pgn
 
 from opening_recognition import recognise_opening
 
+from .cache import ttl_lru_cache
 from .chesscom_client import get_recent_games
 from .opening_names import extract_opening_family, extract_variation
 
@@ -475,7 +475,7 @@ def build_opening_repertoire(
     }
 
 
-@lru_cache(maxsize=32)
+@ttl_lru_cache(maxsize=32, ttl_seconds=300)
 def get_opening_repertoire(
     username: str,
     limit: int = 500,

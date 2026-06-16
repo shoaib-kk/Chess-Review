@@ -52,6 +52,12 @@ class StockfishEngine:
         if self.engine:
             self.engine.quit()
 
+    def configure(self, options: dict) -> None:
+        """Set UCI options on the running engine (e.g. {"Skill Level": 8})."""
+        if self.engine is None:
+            raise RuntimeError("Stockfish engine is not running.")
+        self.engine.configure(options)
+
     def analyse_position(
         self,
         board: chess.Board,

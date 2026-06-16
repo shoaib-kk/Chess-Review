@@ -87,3 +87,21 @@ class GameSummary:
     black_blunders: int = 0
     move_analyses: list = field(default_factory=list)
     initial_fen: str = chess.STARTING_FEN
+
+    def record_classification(self, color: str, classification: MoveClassification) -> None:
+        """Tally one analysed move into this game's per-side error counters.
+
+        Increments the inaccuracy/mistake/blunder count for ``color``
+        ("White" or "Black"). EXCELLENT moves are not counted. Intended to be
+        called once per move while building the summary.
+        """
+        counters = {
+            MoveClassification.INACCURACY: ("white_inaccuracies", "black_inaccuracies"),
+            MoveClassification.MISTAKE: ("white_mistakes", "black_mistakes"),
+            MoveClassification.BLUNDER: ("white_blunders", "black_blunders"),
+        }
+        attrs = counters.get(classification)
+        if attrs is None:
+            return
+        attr = attrs[0] if color == "White" else attrs[1]
+        setattr(self, attr, getattr(self, attr) + 1)

@@ -1,3 +1,4 @@
+import { Download, Search, Swords } from "lucide-react";
 import { useMemo, useState } from "react";
 import type { AnalysisMode, ChessComGame } from "../types";
 import { Badge } from "./ui/Badge";
@@ -65,13 +66,17 @@ export function ChessComImport({
 
       <div className="px-5 pb-5">
       <div className="flex flex-col gap-3 sm:flex-row">
-        <input
-          className="h-11 flex-1 bg-app-panelSecondary px-3 text-app-text outline-none transition placeholder:text-[#9b9b9b] focus:bg-[#3c3c3c]"
-          value={username}
-          placeholder="Chess.com username"
-          onChange={(event) => onUsernameChange(event.target.value)}
-        />
+        <div className="relative flex-1">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-app-faint" strokeWidth={2} />
+          <input
+            className="h-11 w-full rounded-lg border border-app-border bg-app-panelSecondary pl-9 pr-3 text-app-text outline-none transition placeholder:text-app-faint focus-visible:ring-2 focus-visible:ring-app-accent/50 focus:border-app-borderStrong"
+            value={username}
+            placeholder="Chess.com username"
+            onChange={(event) => onUsernameChange(event.target.value)}
+          />
+        </div>
         <Button variant="primary" disabled={!username.trim() || fetching} onClick={fetchGames}>
+          <Download className="h-4 w-4" />
           {fetching ? "Fetching..." : "Fetch Recent Games"}
         </Button>
       </div>
@@ -79,7 +84,7 @@ export function ChessComImport({
       {games.length > 0 && (
         <div className="mt-4 grid gap-3">
           <select
-            className="h-11 bg-app-panelSecondary px-3 text-sm text-app-text outline-none transition focus:bg-[#3c3c3c]"
+            className="h-11 rounded-lg border border-app-border bg-app-panelSecondary px-3 text-sm text-app-text outline-none transition focus-visible:ring-2 focus-visible:ring-app-accent/50 focus:border-app-borderStrong"
             value={selectedIndex}
             onChange={(event) => setSelectedIndex(Number(event.target.value))}
           >
@@ -94,11 +99,19 @@ export function ChessComImport({
           </select>
 
           {selectedGame && selectedMeta && (
-            <div className="bg-app-panelSecondary p-5">
+            <div className="rounded-lg border border-app-border bg-app-panelSecondary/50 p-5">
               <div className="mb-4 flex items-center justify-between gap-3">
-                <div>
-                  <div className="text-sm font-medium text-app-text">{selectedMeta.color} vs {selectedMeta.opponent}</div>
-                  <div className="mt-1 text-xs text-app-muted">{selectedGame.date ?? "Unknown date"}</div>
+                <div className="flex min-w-0 items-center gap-3">
+                  <div className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-app-accentSoft text-app-accent">
+                    <Swords className="h-[18px] w-[18px]" strokeWidth={2} />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="truncate text-sm font-medium text-app-text">{selectedMeta.color} vs {selectedMeta.opponent}</div>
+                    <div className="mt-0.5 flex items-center gap-2 text-xs text-app-muted">
+                      <span>{selectedGame.date ?? "Unknown date"}</span>
+                      {selectedGame.time_class && <Badge tone="neutral">{selectedGame.time_class}</Badge>}
+                    </div>
+                  </div>
                 </div>
                 <Badge tone={selectedMeta.playerResult === "win" ? "green" : selectedMeta.playerResult === "resigned" || selectedMeta.playerResult === "checkmated" ? "red" : "neutral"}>
                   {selectedMeta.playerResult}
@@ -113,12 +126,12 @@ export function ChessComImport({
                 <Meta label="Rated" value={selectedGame.rated ? "Rated" : "Unrated"} />
               </div>
               <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div className="flex flex-wrap items-center gap-2">
+                <div className="inline-flex items-center gap-1 rounded-lg border border-app-border bg-app-panel p-1">
                   {(["fast", "normal", "deep"] as AnalysisMode[]).map((item) => (
                     <button
                       key={item}
-                      className={`h-8 px-3 text-xs font-medium capitalize transition ${
-                        mode === item ? "bg-app-panel text-app-text" : "text-app-muted hover:bg-app-panel hover:text-app-text"
+                      className={`h-8 rounded-md px-3 text-xs font-medium capitalize transition ${
+                        mode === item ? "bg-app-accentSoft text-app-text" : "text-app-muted hover:bg-app-panelSecondary hover:text-app-text"
                       }`}
                       onClick={() => onModeChange(item)}
                     >
@@ -141,9 +154,9 @@ export function ChessComImport({
 
 function Meta({ label, value }: { label: string; value: string }) {
   return (
-    <div>
-      <div className="text-xs uppercase tracking-wide text-app-muted">{label}</div>
-      <div className="mt-1 font-medium text-app-text">{value}</div>
+    <div className="rounded-lg border border-app-border bg-app-panel px-3 py-2.5">
+      <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-app-muted">{label}</div>
+      <div className="mt-1 truncate font-medium text-app-text">{value}</div>
     </div>
   );
 }

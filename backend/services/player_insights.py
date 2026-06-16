@@ -3,7 +3,6 @@ from __future__ import annotations
 import io
 import re
 from collections import Counter, defaultdict
-from functools import lru_cache
 from statistics import mean
 from typing import Any
 
@@ -12,6 +11,7 @@ import chess.pgn
 
 from opening_recognition import recognise_opening
 
+from .cache import ttl_lru_cache
 from .chesscom_client import get_recent_games
 from .opening_names import extract_opening_family, extract_variation
 
@@ -83,19 +83,20 @@ def _score_for_result(result: str | None) -> float:
     return 0.0
 
 
-def _estimated_accuracy(score: float, ply_count: int, rating: int | None) -> float:
-    base = 73 + score * 14
-    if ply_count >= 80:
-        base -= 3
-    elif ply_count <= 25:
-        base += 2
-    if rating:
-        base += min(6, max(-4, (rating - 1200) / 250))
-    return round(max(45, min(96, base)), 1)
+def _real_accuracy(raw: dict[str, Any], color: str | None) -> float | None:
+    """Return Chess.com's own per-game accuracy for the user, if available.
 
-
-def _estimated_cp_loss(accuracy: float) -> float:
-    return round(max(8, (100 - accuracy) * 4.7), 1)
+    Chess.com only reports `accuracies` for games that were analysed via Game
+    Review, so this is real (engine-derived) data or None when the game was
+    never analysed. We never fabricate a value from the result.
+    """
+    if not color:
+        return None
+    value = raw.get("white_accuracy") if color == "White" else raw.get("black_accuracy")
+    try:
+        return round(float(value), 1) if value is not None else None
+    except (TypeError, ValueError):
+        return None
 
 
 def _rating(game: chess.pgn.Game | None, color: str | None) -> int | None:
@@ -223,8 +224,8 @@ def _trend_window(records: list[dict[str, Any]], size: int) -> dict[str, Any]:
     return {
         "games": len(window),
         "win_rate": _pct(sum(item["score"] for item in window), len(window)),
-        "avg_accuracy": _safe_mean([item["accuracy"] for item in window]),
-        "avg_cp_loss": _safe_mean([item["cp_loss"] for item in window]),
+        "avg_accuracy": _safe_mean([item["accuracy"] for item in window if item["accuracy"] is not None]),
+        "avg_cp_loss": _safe_mean([item["cp_loss"] for item in window if item["cp_loss"] is not None]),
         "blunders": sum(item["blunder_proxy"] for item in window),
     }
 
@@ -288,7 +289,7 @@ def _recommendations(strengths: list[str], weaknesses: list[str], mistake_rows: 
     return recs[:4]
 
 
-@lru_cache(maxsize=32)
+@ttl_lru_cache(maxsize=32, ttl_seconds=300)
 def get_player_insights(username: str, limit: int = 200, time_class: str | None = None, rated_only: bool = False) -> dict[str, Any]:
     limit = max(1, min(limit, 300))
     normalized = username.strip()
@@ -321,8 +322,8 @@ def get_player_insights(username: str, limit: int = 200, time_class: str | None 
         player_result = raw["white_result"] if color == "White" else raw["black_result"]
         score = _score_for_result(player_result)
         rating = _rating(pgn_game, color)
-        accuracy = _estimated_accuracy(score, ply_count, rating)
-        cp_loss = _estimated_cp_loss(accuracy)
+        accuracy = _real_accuracy(raw, color)  # real Chess.com accuracy or None
+        cp_loss = None  # no real per-game cp-loss source without engine analysis
         sans = _move_sans(pgn_game, limit=80)
         captures_checks = sum(1 for san in sans if "x" in san or "+" in san or "#" in san)
 
@@ -359,8 +360,9 @@ def get_player_insights(username: str, limit: int = 200, time_class: str | None 
             }
         target[group_key]["games"] += 1
         target[group_key]["score"] += score
-        target[group_key]["accuracies"].append(accuracy)
-        target[group_key]["cp_losses"].append(cp_loss)
+        if accuracy is not None:
+            target[group_key]["accuracies"].append(accuracy)
+        # cp_losses intentionally left empty: no real per-game cp-loss available.
         variation_key = variation or "Main line / Other"
         target[group_key]["variations"][variation_key] += 1
         target[group_key]["variation_ecos"].setdefault(variation_key, eco)
@@ -380,6 +382,7 @@ def get_player_insights(username: str, limit: int = 200, time_class: str | None 
             rating_points.append({"date": raw["date"], "rating": rating})
 
     total = len(records)
+    accuracy_values = [item["accuracy"] for item in records if item["accuracy"] is not None]
     white_records = [item for item in records if item["color"] == "White"]
     black_records = [item for item in records if item["color"] == "Black"]
     white_openings = _opening_rows(white_groups, max(1, len(white_records)))
@@ -425,8 +428,9 @@ def get_player_insights(username: str, limit: int = 200, time_class: str | None 
             "win_rate": _pct(sum(item["score"] for item in records), total),
             "white_win_rate": _pct(sum(item["score"] for item in white_records), len(white_records)),
             "black_win_rate": _pct(sum(item["score"] for item in black_records), len(black_records)),
-            "average_accuracy": _safe_mean([item["accuracy"] for item in records]),
-            "average_cp_loss": _safe_mean([item["cp_loss"] for item in records]),
+            "average_accuracy": _safe_mean(accuracy_values),
+            "games_with_accuracy": len(accuracy_values),
+            "average_cp_loss": None,
             "average_game_length": _safe_mean([item["ply_count"] / 2 for item in records]),
         },
         "openings": {
