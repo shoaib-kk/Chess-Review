@@ -136,7 +136,7 @@ export function OpeningRepertoirePage({
           </label>
           <Button variant="primary" disabled={!username.trim() || loading} onClick={fetchRepertoire}>
             <Filter className="h-4 w-4" />
-            {loading ? "Loading..." : "Refresh Repertoire"}
+            {loading ? "Reading public games..." : "Refresh Repertoire"}
           </Button>
         </div>
       </Card>
@@ -174,7 +174,7 @@ export function OpeningRepertoirePage({
             <div className="grid h-11 w-11 place-items-center rounded-full bg-app-accentSoft text-app-accent">
               <BookOpen className="h-5 w-5" />
             </div>
-            <p className="text-sm text-app-muted">{loading ? "Building your repertoire..." : "Enter a Chess.com username to build your opening repertoire."}</p>
+            <p className="text-sm text-app-muted">{loading ? "Reading public games and grouping openings..." : "Enter a Chess.com username to build your opening repertoire."}</p>
           </div>
         </Card>
       )}
@@ -344,7 +344,7 @@ function OpeningInsightList({ tone, rows }: { tone: "good" | "blunder"; rows: Op
           <div className="min-w-0">
             <p className="truncate text-sm font-medium text-app-text">{row.opening_name}</p>
             <p className="mt-1 font-mono text-xs text-app-muted">
-              {fmt(row.win_rate, "%")} Win Rate - {fmt(row.avg_accuracy)} Accuracy - {row.games} Games
+              {fmt(row.win_rate, "%")} Win Rate - {row.games} Games
             </p>
           </div>
         </div>
@@ -373,7 +373,7 @@ function MostPlayedChart({
   return (
     <Card>
       <CardHeader
-        title="Top 10 Most Played Opening Families"
+        title="Top 10 Most Played Openings"
         eyebrow="Distribution"
         action={
           <div className="flex gap-4 text-xs text-app-muted">
@@ -383,8 +383,8 @@ function MostPlayedChart({
         }
       />
       <div className="px-5 py-5">
-        <p className="mb-3 text-xs text-app-muted">Click a bar to open detailed stats for that opening family.</p>
-        <div className="cursor-pointer">
+        <p className="mb-3 text-xs text-app-muted">Click a bar to open detailed stats for that opening.</p>
+        <div className="cursor-pointer overflow-x-auto">
         <ResponsiveContainer width="100%" height={height}>
           <BarChart data={data} layout="vertical" margin={{ left: 12, right: 28, top: 8, bottom: 8 }} onClick={handleChartClick}>
             <CartesianGrid stroke="#262a31" horizontal={false} />
@@ -485,17 +485,15 @@ function OpeningRow({ row }: { row: OpeningRepertoireRow }) {
           <ChevronRight className="h-4 w-4 shrink-0 text-app-faint transition group-open:rotate-90" />
           <div className="min-w-0">
             <p className="truncate text-sm font-medium text-app-text">{row.opening_name}</p>
-            <p className="mt-0.5 font-mono text-xs text-app-muted">{row.eco}</p>
+            {row.eco && <p className="mt-0.5 text-xs text-app-muted">Code {row.eco}</p>}
           </div>
         </div>
-        <div className="grid grid-cols-3 gap-x-5 gap-y-2 pl-7 font-mono text-sm text-app-text md:pl-0">
+        <div className="grid grid-cols-2 gap-x-5 gap-y-2 pl-7 font-mono text-sm text-app-text md:pl-0">
           <SmallMetric label="Games" value={String(row.games)} />
           <SmallMetric label="Win Rate" value={fmt(row.win_rate, "%")} />
-          <SmallMetric label="Accuracy" value={fmt(row.avg_accuracy, "%")} />
         </div>
       </summary>
-      <div className="grid gap-4 border-t border-app-border px-4 py-4 text-sm text-app-muted lg:grid-cols-4">
-        <DetailList title="Variations" rows={row.variations.map((item) => `${item.variation}: ${item.games} games (${item.frequency}%)`)} />
+      <div className="grid gap-4 border-t border-app-border px-4 py-4 text-sm text-app-muted lg:grid-cols-3">
         <DetailList title="Typical results" rows={row.typical_results.map((item) => `${item.result}: ${item.games} games (${item.frequency}%)`)} />
         <GameList title="Best examples" rows={row.best_example_games} />
         <GameList title="Recent games" rows={row.recent_games} />
@@ -587,7 +585,7 @@ function OpeningDetail({
           </div>
         </div>
         <span className="rounded-full bg-app-panelSecondary px-3 py-1 font-mono text-xs text-app-muted ring-1 ring-inset ring-app-border">
-          {row.eco || "ECO —"}
+          {row.eco ? `Code ${row.eco}` : "No code"}
         </span>
       </div>
 

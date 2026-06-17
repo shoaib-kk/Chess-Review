@@ -139,7 +139,7 @@ export function HomeDashboard({
                   <Sparkles className="h-3.5 w-3.5 text-app-accent" />
                 </span>
                 <span className="mt-0.5 block truncate text-xs text-app-muted">
-                  {sampleLoading ? "Analyzing the sample game..." : "No account needed — see a full review instantly"}
+                  {sampleLoading ? "Analyzing the sample game..." : "No account needed - see a full review instantly"}
                 </span>
               </span>
             </button>
@@ -154,7 +154,7 @@ export function HomeDashboard({
               <span className="min-w-0">
                 <span className="text-sm font-semibold text-app-text">Review one of your games</span>
                 <span className="mt-0.5 block truncate text-xs text-app-muted">
-                  Import directly from your Chess.com account
+                  Import public games from Chess.com
                 </span>
               </span>
             </button>
@@ -175,13 +175,13 @@ export function HomeDashboard({
                 />
               </label>
               <Button variant="primary" type="submit" disabled={!draftUsername.trim() || draftUsername.trim() === username.trim()}>
-                {hasUsername ? "Update" : "Connect"}
+                {hasUsername ? "Update" : "Save username"}
                 <ArrowRight className="h-4 w-4" />
               </Button>
             </form>
             <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
               <p className="text-xs text-app-faint">
-                We only read your public Chess.com games — no password needed.
+                We only read your public Chess.com games. No password needed.
               </p>
               <ApiStatusIndicator status={apiStatus} />
             </div>
@@ -214,7 +214,7 @@ export function HomeDashboard({
                   <ArrowRight className="h-3.5 w-3.5 transition group-hover:translate-x-0.5" />
                   {locked && (
                     <span className="ml-1 rounded-full bg-app-panelSecondary px-2 py-0.5 text-[10px] font-medium text-app-faint">
-                      username needed
+                      uses Chess.com username
                     </span>
                   )}
                 </span>

@@ -11,15 +11,20 @@ interface PgnInputProps {
 
 export function PgnInput({ loading, onAnalyze }: PgnInputProps) {
   const [pgn, setPgn] = useState("");
-  const [depth, setDepth] = useState(16);
   const [mode, setMode] = useState<AnalysisMode>("normal");
 
   const canAnalyze = pgn.trim().length > 0 && !loading;
+  const modeDepth: Record<AnalysisMode, number> = { fast: 10, normal: 16, deep: 22 };
+  const modeLabels: Record<AnalysisMode, { label: string; help: string }> = {
+    fast: { label: "Quick look", help: "Fastest" },
+    normal: { label: "Standard", help: "Balanced" },
+    deep: { label: "Thorough", help: "Slower" },
+  };
 
   return (
     <Card className="overflow-hidden">
-      <CardHeader title="Paste or upload PGN" eyebrow="Manual review">
-        Load any PGN and run the same Stockfish review flow.
+      <CardHeader title="Paste or upload a game" eyebrow="Manual review">
+        Paste a PGN from Chess.com, Lichess, or an over-the-board game. No username needed.
       </CardHeader>
 
       <div className="px-5 pb-5">
@@ -52,31 +57,19 @@ export function PgnInput({ loading, onAnalyze }: PgnInputProps) {
             {(["fast", "normal", "deep"] as AnalysisMode[]).map((item) => (
               <button
                 key={item}
-                className={`h-8 rounded-md px-3 text-xs font-medium capitalize transition ${
+                title={modeLabels[item].help}
+                className={`h-9 rounded-md px-3 text-xs font-medium transition ${
                   mode === item ? "bg-app-accentSoft text-app-text" : "text-app-muted hover:bg-app-panelSecondary hover:text-app-text"
                 }`}
                 onClick={() => setMode(item)}
               >
-                {item}
+                {modeLabels[item].label}
               </button>
             ))}
           </div>
-
-          <label className="flex items-center gap-3 text-sm text-app-muted">
-            Depth
-            <input
-              type="range"
-              min={8}
-              max={24}
-              value={depth}
-              onChange={(event) => setDepth(Number(event.target.value))}
-              className="accent-app-accent"
-            />
-            <span className="w-8 text-right font-mono text-app-text">{depth}</span>
-          </label>
-          <Button variant="primary" disabled={!canAnalyze} onClick={() => onAnalyze(pgn.trim(), depth, mode)}>
+          <Button variant="primary" disabled={!canAnalyze} onClick={() => onAnalyze(pgn.trim(), modeDepth[mode], mode)}>
             <Swords className="h-4 w-4" />
-            {loading ? "Analysing..." : "Analyse Game"}
+            {loading ? "Analyzing..." : "Analyze Game"}
           </Button>
         </div>
       </div>

@@ -74,12 +74,20 @@ export function SummaryStrip({
       </div>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-        <StatTile label={summary.white_player} value={fmt(summary.white_accuracy, "%")} />
-        <StatTile label={summary.black_player} value={fmt(summary.black_accuracy, "%")} />
-        <StatTile label="Overall" value={fmt(accuracy, "%")} />
-        <StatTile label="Inaccuracies" value={String(inaccuracies)} tone="warning" />
-        <StatTile label="Mistakes" value={String(mistakes)} tone="mistake" />
-        <StatTile label="Blunders" value={String(blunders)} tone="blunder" />
+        <StatTile label={summary.white_player} value={fmt(summary.white_accuracy, "%")} title="Accuracy estimates how often this side found strong moves." />
+        <StatTile label={summary.black_player} value={fmt(summary.black_accuracy, "%")} title="Accuracy estimates how often this side found strong moves." />
+        <StatTile label="Overall" value={fmt(accuracy, "%")} title="Average review accuracy for the selected perspective." />
+        <StatTile label="Inaccuracies" value={String(inaccuracies)} tone="warning" title="Small missed chances. These are marked ?!." />
+        <StatTile label="Mistakes" value={String(mistakes)} tone="mistake" title="Bigger evaluation swings. These are marked ?." />
+        <StatTile label="Blunders" value={String(blunders)} tone="blunder" title="Critical missed chances. These are marked ??." />
+      </div>
+
+      <div className="rounded-lg border border-app-border bg-app-panelSecondary/40 px-4 py-3 text-xs leading-5 text-app-muted">
+        <span className="font-semibold text-app-text">What do these mean?</span>{" "}
+        The eval bar shows who is better after the selected move. Accuracy is a plain-language engine score.
+        Badges mean: <span className="font-mono text-app-warning">?!</span> small miss,{" "}
+        <span className="font-mono text-app-mistake">?</span> mistake,{" "}
+        <span className="font-mono text-app-blunder">??</span> blunder. Use the arrow keys to step through moves.
       </div>
     </section>
   );
@@ -89,10 +97,12 @@ function StatTile({
   label,
   value,
   tone = "neutral",
+  title,
 }: {
   label: string;
   value: string;
   tone?: "neutral" | "warning" | "mistake" | "blunder";
+  title?: string;
 }) {
   const valueTone =
     tone === "warning"
@@ -104,7 +114,7 @@ function StatTile({
           : "text-app-text";
 
   return (
-    <div className="rounded-lg border border-app-border bg-app-panel/60 px-3 py-2.5 shadow-card">
+    <div className="rounded-lg border border-app-border bg-app-panel/60 px-3 py-2.5 shadow-card" title={title}>
       <div className="truncate text-[10px] font-semibold uppercase tracking-[0.18em] text-app-muted">{label}</div>
       <div className={`mt-1 font-mono text-lg font-semibold ${valueTone}`}>{value}</div>
     </div>

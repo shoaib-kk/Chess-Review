@@ -40,6 +40,11 @@ export function ChessComImport({
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [fetching, setFetching] = useState(false);
   const selectedGame = games[selectedIndex];
+  const modeLabels: Record<AnalysisMode, { label: string; help: string }> = {
+    fast: { label: "Quick look", help: "Fastest review" },
+    normal: { label: "Standard", help: "Balanced review" },
+    deep: { label: "Thorough", help: "Slower, more careful review" },
+  };
 
   const selectedMeta = useMemo(
     () => (selectedGame ? gameMeta(selectedGame, username) : null),
@@ -61,7 +66,7 @@ export function ChessComImport({
   return (
     <Card className="overflow-hidden">
       <CardHeader title="Import from Chess.com" eyebrow="Game history">
-        Fetch recent public games and review one from your perspective.
+        Enter your Chess.com username to read your public games. No password needed.
       </CardHeader>
 
       <div className="px-5 pb-5">
@@ -71,13 +76,13 @@ export function ChessComImport({
           <input
             className="h-11 w-full rounded-lg border border-app-border bg-app-panelSecondary pl-9 pr-3 text-app-text outline-none transition placeholder:text-app-faint focus-visible:ring-2 focus-visible:ring-app-accent/50 focus:border-app-borderStrong"
             value={username}
-            placeholder="Chess.com username"
+            placeholder="Enter your Chess.com username"
             onChange={(event) => onUsernameChange(event.target.value)}
           />
         </div>
         <Button variant="primary" disabled={!username.trim() || fetching} onClick={fetchGames}>
           <Download className="h-4 w-4" />
-          {fetching ? "Fetching..." : "Fetch Recent Games"}
+          {fetching ? "Fetching..." : "Fetch public games"}
         </Button>
       </div>
 
@@ -133,14 +138,15 @@ export function ChessComImport({
                       className={`h-8 rounded-md px-3 text-xs font-medium capitalize transition ${
                         mode === item ? "bg-app-accentSoft text-app-text" : "text-app-muted hover:bg-app-panelSecondary hover:text-app-text"
                       }`}
+                      title={modeLabels[item].help}
                       onClick={() => onModeChange(item)}
                     >
-                      {item}
+                      {modeLabels[item].label}
                     </button>
                   ))}
                 </div>
                 <Button className="w-full sm:w-auto" variant="primary" disabled={loading} onClick={() => onAnalyzeGame(username.trim(), selectedGame.pgn, mode)}>
-                  {loading ? "Analysing..." : "Analyze Game"}
+                  {loading ? "Analyzing..." : "Analyze Game"}
                 </Button>
               </div>
             </div>

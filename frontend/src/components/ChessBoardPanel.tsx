@@ -76,6 +76,12 @@ function evalLabel(evalCp: number | null) {
   return `${pawns > 0 ? "+" : ""}${pawns.toFixed(2)}`;
 }
 
+function evalDescription(evalCp: number | null) {
+  if (evalCp === null || Math.abs(evalCp) < 30) return "Equal";
+  if (evalCp > 0) return evalCp > 300 ? "White is winning" : "White is better";
+  return evalCp < -300 ? "Black is winning" : "Black is better";
+}
+
 function evalLeader(evalCp: number | null) {
   if (evalCp === null || Math.abs(evalCp) < 1) return "equal";
   return evalCp > 0 ? "white" : "black";
@@ -100,7 +106,7 @@ export function ChessboardPanel({
         fen={exploreFen}
         orientation={flipped ? "black" : "white"}
         onExit={() => setExploreFen(null)}
-        title={`Play out · from ${moveLabel(move)}`}
+        title={`Play out from ${moveLabel(move)}`}
       />
     );
   }
@@ -167,7 +173,11 @@ export function ChessboardPanel({
 
       <div className="px-4 pb-5 pt-5 sm:px-5">
         <div className="mx-auto grid max-w-[730px] grid-cols-[28px_minmax(0,680px)] gap-3">
-          <div className="relative overflow-hidden rounded-lg border border-app-border bg-[#111111]" aria-label={`Evaluation ${evalLabel(currentEval)}`}>
+          <div
+            className="relative overflow-hidden rounded-lg border border-app-border bg-[#111111]"
+            aria-label={`Evaluation: ${evalDescription(currentEval)}`}
+            title={`${evalDescription(currentEval)} (${evalLabel(currentEval)})`}
+          >
             <div className="absolute inset-x-0 bottom-0 bg-[#e6e6e6] transition-all duration-200" style={{ height: `${whitePercent}%` }} />
             <div className="absolute inset-x-0 top-0 bg-[#15161b] transition-all duration-200" style={{ height: `${100 - whitePercent}%` }} />
             {leader === "black" && (

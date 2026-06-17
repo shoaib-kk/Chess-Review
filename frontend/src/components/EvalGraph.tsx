@@ -30,6 +30,12 @@ function clampEval(value: number | null): number {
   return Math.max(-10, Math.min(10, value));
 }
 
+function evalText(value: number | null) {
+  if (value === null || Math.abs(value) < 0.3) return "Equal";
+  if (value > 0) return value > 3 ? "White is winning" : "White is better";
+  return value < -3 ? "Black is winning" : "Black is better";
+}
+
 export function EvalGraphPanel({ summary, currentIndex, onSelectMove, embedded = false }: EvalGraphPanelProps) {
   const data = summary.move_analyses.map((move, index) => ({
     index,
@@ -41,8 +47,9 @@ export function EvalGraphPanel({ summary, currentIndex, onSelectMove, embedded =
   const content = (
     <>
       <div className="px-5 pb-2 pt-4">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-app-accent/80">Engine line</p>
+        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-app-accent/80">Position trend</p>
         <h2 className="mt-1 text-base font-semibold text-app-text">Evaluation</h2>
+        <p className="mt-1 text-xs text-app-muted">Above zero favors White; below zero favors Black.</p>
       </div>
       <div className="h-48 px-3 pb-4">
         <ResponsiveContainer width="100%" height="100%">
@@ -67,7 +74,7 @@ export function EvalGraphPanel({ summary, currentIndex, onSelectMove, embedded =
               cursor={{ stroke: "#6366f1", strokeWidth: 1, strokeDasharray: "4 4" }}
               contentStyle={{ background: "#16181d", border: "1px solid #262a33", borderRadius: 12 }}
               labelStyle={{ color: "#e7e9ee" }}
-              formatter={(value, _name, props) => [`${Number(value).toFixed(2)}`, props.payload.label]}
+              formatter={(value, _name, props) => [evalText(Number(value)), props.payload.label]}
             />
             <ReferenceLine y={0} stroke="#8b93a155" />
             {currentIndex >= 0 && <ReferenceLine x={currentIndex} stroke="#6366f1" strokeDasharray="4 4" />}

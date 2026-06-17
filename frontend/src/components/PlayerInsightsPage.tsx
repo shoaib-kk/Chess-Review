@@ -138,7 +138,7 @@ function EmptyState({ loading }: { loading: boolean }) {
           <BarChart3 className="h-5 w-5" />
         </div>
         <p className="text-sm text-app-muted">
-          {loading ? "Building your insights..." : "Enter a Chess.com username to build player insights."}
+          {loading ? "Reading public games and building your insights..." : "Enter a Chess.com username, then refresh to build player insights."}
         </p>
       </div>
     </Card>
@@ -147,23 +147,24 @@ function EmptyState({ loading }: { loading: boolean }) {
 
 function InsightsReport({ insights }: { insights: PlayerInsights }) {
   const openings = topOpenings(insights);
+  const hasAccuracy = insights.summary.games_with_accuracy > 0;
 
   return (
     <div className="grid gap-5">
       <Card>
         <CardHeader title="Summary" eyebrow="Overview" />
         <div className="grid gap-3 px-5 py-5 sm:grid-cols-3">
-          <Metric label="Games" value={String(insights.summary.games_analyzed)} icon={BarChart3} />
           <Metric label="Win rate" value={fmt(insights.summary.win_rate, "%")} icon={Trophy} tone="good" />
+          <Metric label="Games" value={String(insights.summary.games_analyzed)} icon={BarChart3} />
           <Metric
             label="Accuracy"
-            value={fmt(insights.summary.average_accuracy, "%")}
+            value={hasAccuracy ? fmt(insights.summary.average_accuracy, "%") : "Not yet"}
             icon={Target}
             tone="accent"
             sub={
-              insights.summary.games_with_accuracy > 0
-                ? `Chess.com review · ${insights.summary.games_with_accuracy} of ${insights.summary.games_analyzed} games`
-                : "No Chess.com-analysed games"
+              hasAccuracy
+                ? `Chess.com review - ${insights.summary.games_with_accuracy} of ${insights.summary.games_analyzed} games`
+                : "No analyzed games yet - review one to see accuracy."
             }
           />
         </div>
@@ -177,7 +178,9 @@ function InsightsReport({ insights }: { insights: PlayerInsights }) {
       </Card>
 
       <Card>
-        <CardHeader title="Where Mistakes Happen" eyebrow="Error analysis" />
+        <CardHeader title="Likely Trouble Spots" eyebrow="Estimated from results">
+          These are rough patterns from public game data, not a full engine diagnosis.
+        </CardHeader>
         <div className="px-5 py-5">
           <MistakePie data={insights.mistakes.by_phase} />
         </div>

@@ -13,10 +13,10 @@ interface HeaderProps {
 }
 
 const navItems: { mode: Mode; label: string; icon: LucideIcon; title: string }[] = [
-  { mode: "home", label: "Home", icon: Home, title: "Start here — overview of everything you can do" },
+  { mode: "home", label: "Home", icon: Home, title: "Start here: overview of everything you can do" },
   { mode: "chesscom", label: "Import Game", icon: Download, title: "Import and review your Chess.com games" },
-  { mode: "pgn", label: "Paste a game (PGN)", icon: FileText, title: "Paste a PGN from any source to review it" },
-  { mode: "insights", label: "Player Insights", icon: BarChart3, title: "Accuracy, mistakes and trends over time" },
+  { mode: "pgn", label: "Paste a game", icon: FileText, title: "Paste a PGN from any source to review it" },
+  { mode: "insights", label: "Insights", icon: BarChart3, title: "Win rate, accuracy, and trends over time" },
   { mode: "repertoire", label: "Repertoire", icon: BookOpen, title: "Your openings and where to improve" },
   { mode: "puzzles", label: "Puzzles", icon: Puzzle, title: "Tactics built from your own games" },
 ];
@@ -24,7 +24,7 @@ const navItems: { mode: Mode; label: string; icon: LucideIcon; title: string }[]
 export function Header({ activeMode, onModeChange, username, onLogout, onNewReview }: HeaderProps) {
   return (
     <aside className="border-app-border bg-app-panel/40 backdrop-blur-sm lg:fixed lg:inset-y-0 lg:left-0 lg:z-20 lg:w-60 lg:border-r">
-      <div className="mx-auto flex max-w-7xl flex-col gap-6 px-4 py-5 lg:h-full lg:px-4 lg:py-6">
+      <div className="mx-auto flex max-w-7xl flex-col gap-5 px-4 py-5 lg:h-full lg:px-4 lg:py-6">
         <div className="min-w-0">
           <h1 className="text-base font-semibold tracking-tight text-app-text">Chess Review</h1>
           <p className="truncate text-xs text-app-muted">Analysis workspace</p>
@@ -33,16 +33,16 @@ export function Header({ activeMode, onModeChange, username, onLogout, onNewRevi
         <button
           type="button"
           onClick={() => onModeChange("home")}
-          title={username ? "Chess.com username — manage on Home" : "Set your Chess.com username on Home"}
+          title={username ? "Chess.com username: manage on Home" : "Set your Chess.com username on Home"}
           className="min-w-0 rounded-lg border border-app-border bg-app-panelSecondary/50 px-3 py-2.5 text-left transition hover:border-app-borderStrong hover:bg-app-panelSecondary"
         >
-          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-app-muted">Chess.com</p>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-app-muted">Chess.com username</p>
           <p className="mt-0.5 truncate font-mono text-sm font-medium text-app-text">
-            {username || <span className="text-app-faint">Guest — set a username</span>}
+            {username || <span className="text-app-faint">Guest - PGN review available</span>}
           </p>
         </button>
 
-        <nav className="flex flex-wrap gap-1.5 lg:grid lg:gap-1">
+        <nav className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1 lg:mx-0 lg:grid lg:gap-1 lg:overflow-visible lg:px-0 lg:pb-0">
           {navItems.map((item) => {
             const Icon = item.icon;
             const active = activeMode === item.mode;
@@ -52,7 +52,7 @@ export function Header({ activeMode, onModeChange, username, onLogout, onNewRevi
                 onClick={() => onModeChange(item.mode)}
                 title={item.title}
                 aria-current={active ? "page" : undefined}
-                className={`group relative flex h-10 items-center gap-3 rounded-lg px-3 text-left text-sm font-medium transition lg:w-full ${
+                className={`group relative flex h-10 shrink-0 items-center gap-3 rounded-lg px-3 text-left text-sm font-medium transition lg:w-full ${
                   active
                     ? "bg-app-accentSoft text-app-text"
                     : "text-app-muted hover:bg-app-panelSecondary/70 hover:text-app-text"
