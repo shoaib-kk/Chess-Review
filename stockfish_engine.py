@@ -4,14 +4,31 @@ Small Stockfish wrapper using python-chess.
 
 from __future__ import annotations
 
+import logging
 import os
 import shutil
+import threading
 from pathlib import Path
 
 import chess
 import chess.engine
 
+logger = logging.getLogger(__name__)
+
 STOCKFISH_PATH = os.getenv("STOCKFISH_PATH", "/usr/games/stockfish")
+
+# Memory/CPU caps for constrained hosts (e.g. Render's small instances). Stockfish
+# defaults are modest, but we set them explicitly so a single analysis can't grab
+# more than we budgeted. Override via env vars without a code change.
+STOCKFISH_HASH_MB = int(os.getenv("STOCKFISH_HASH_MB", "32"))
+STOCKFISH_THREADS = int(os.getenv("STOCKFISH_THREADS", "1"))
+
+# Serialises engine usage process-wide. The interactive /analyze path and the
+# background puzzle miner each launch their own Stockfish; without this lock they
+# can run concurrently and hold two NNUE nets in RAM at once, which OOM-kills small
+# instances. The lock is held per game (acquired in __enter__, released in
+# __exit__), so the two paths interleave at game boundaries rather than stacking.
+_ENGINE_LOCK = threading.Lock()
 
 
 def find_stockfish() -> str:
@@ -45,12 +62,26 @@ class StockfishEngine:
         self.engine: chess.engine.SimpleEngine | None = None
 
     def __enter__(self):
-        self.engine = chess.engine.SimpleEngine.popen_uci(self.path)
+        # Acquire before launching so only one Stockfish process exists at a time.
+        _ENGINE_LOCK.acquire()
+        try:
+            self.engine = chess.engine.SimpleEngine.popen_uci(self.path)
+            try:
+                self.engine.configure({"Hash": STOCKFISH_HASH_MB, "Threads": STOCKFISH_THREADS})
+            except chess.engine.EngineError as exc:
+                # Exotic builds may reject these option names; analysis still works.
+                logger.warning("Could not set Hash/Threads on Stockfish: %s", exc)
+        except Exception:
+            _ENGINE_LOCK.release()
+            raise
         return self
 
     def __exit__(self, exc_type, exc, tb):
-        if self.engine:
-            self.engine.quit()
+        try:
+            if self.engine:
+                self.engine.quit()
+        finally:
+            _ENGINE_LOCK.release()
 
     def configure(self, options: dict) -> None:
         """Set UCI options on the running engine (e.g. {"Skill Level": 8})."""
