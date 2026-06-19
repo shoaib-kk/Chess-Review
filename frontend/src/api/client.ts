@@ -65,7 +65,10 @@ export async function fetchOpeningRepertoire(
 }
 
 export async function getHealth(): Promise<string> {
-  const response = await api.get<{ status: string }>("/health");
+  // Use the root health route rather than "/health" — ad blockers / privacy
+  // extensions match the word "health" in request paths and block the ping,
+  // which would otherwise show the app as "Offline" for those users.
+  const response = await api.get<{ status: string }>("/");
   return response.data.status;
 }
 
