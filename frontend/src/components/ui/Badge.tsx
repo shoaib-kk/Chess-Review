@@ -1,25 +1,19 @@
 import type { MoveClassification } from "../../types";
+import { classificationMeta, type BadgeTone } from "../../utils/classification";
 
 interface BadgeProps {
   children: string;
-  tone?: "neutral" | "blue" | "green" | "yellow" | "orange" | "red";
+  tone?: BadgeTone;
   className?: string;
 }
 
-const toneClasses = {
+const toneClasses: Record<BadgeTone, string> = {
   neutral: "bg-app-panelSecondary text-app-muted ring-app-border",
-  blue: "bg-app-accentSoft text-[#a5b4fc] ring-app-accent/30",
-  green: "bg-[#34d39915] text-app-good ring-[#34d39940]",
-  yellow: "bg-[#fbbf2415] text-app-warning ring-[#fbbf2440]",
-  orange: "bg-[#fb923c15] text-app-mistake ring-[#fb923c40]",
-  red: "bg-[#f43f5e15] text-app-blunder ring-[#f43f5e40]",
-};
-
-const classificationSymbols: Record<MoveClassification, string> = {
-  Excellent: "!",
-  Inaccuracy: "?!",
-  Mistake: "?",
-  Blunder: "??",
+  blue: "bg-[#2cc7b815] text-[#5fd6c9] ring-[#2cc7b833]",
+  green: "bg-[#56b27715] text-app-good ring-[#56b27733]",
+  yellow: "bg-[#d6b24a15] text-app-warning ring-[#d6b24a33]",
+  orange: "bg-[#d9863e15] text-app-mistake ring-[#d9863e33]",
+  red: "bg-[#d9574f15] text-app-blunder ring-[#d9574f33]",
 };
 
 export function Badge({ children, tone = "neutral", className = "" }: BadgeProps) {
@@ -33,14 +27,7 @@ export function Badge({ children, tone = "neutral", className = "" }: BadgeProps
 }
 
 export function ClassificationBadge({ classification }: { classification: MoveClassification }) {
-  const tone =
-    classification === "Excellent"
-      ? "green"
-      : classification === "Inaccuracy"
-        ? "yellow"
-        : classification === "Mistake"
-          ? "orange"
-          : "red";
-
-  return <Badge tone={tone}>{`${classification} ${classificationSymbols[classification]}`}</Badge>;
+  const meta = classificationMeta(classification);
+  const text = meta.badgeSymbol ? `${meta.label} ${meta.badgeSymbol}` : meta.label;
+  return <Badge tone={meta.tone}>{text}</Badge>;
 }

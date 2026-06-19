@@ -3,9 +3,9 @@ interface ApiStatusIndicatorProps {
 }
 
 const config: Record<ApiStatusIndicatorProps["status"], { color: string; label: string }> = {
-  checking: { color: "#9aa0aa", label: "Connecting" },
-  ok: { color: "#34d399", label: "Connected" },
-  down: { color: "#f43f5e", label: "Offline" },
+  checking: { color: "#9a9ca5", label: "Connecting" },
+  ok: { color: "#56b277", label: "Connected" },
+  down: { color: "#d9574f", label: "Offline" },
 };
 
 export function ApiStatusIndicator({ status }: ApiStatusIndicatorProps) {

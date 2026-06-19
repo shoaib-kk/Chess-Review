@@ -64,12 +64,12 @@ export function ChessComImport({
   }
 
   return (
-    <Card className="overflow-hidden">
+    <Card>
       <CardHeader title="Import from Chess.com" eyebrow="Game history">
         Enter your Chess.com username to read your public games. No password needed.
       </CardHeader>
 
-      <div className="px-5 pb-5">
+      <div>
       <div className="flex flex-col gap-3 sm:flex-row">
         <div className="relative flex-1">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-app-faint" strokeWidth={2} />
@@ -104,10 +104,10 @@ export function ChessComImport({
           </select>
 
           {selectedGame && selectedMeta && (
-            <div className="rounded-lg border border-app-border bg-app-panelSecondary/50 p-5">
+            <div className="border-t border-app-border pt-5">
               <div className="mb-4 flex items-center justify-between gap-3">
                 <div className="flex min-w-0 items-center gap-3">
-                  <div className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-app-accentSoft text-app-accent">
+                  <div className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-app-panelSecondary text-app-muted">
                     <Swords className="h-[18px] w-[18px]" strokeWidth={2} />
                   </div>
                   <div className="min-w-0">
@@ -131,7 +131,7 @@ export function ChessComImport({
                 <Meta label="Rated" value={selectedGame.rated ? "Rated" : "Unrated"} />
               </div>
               <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div className="inline-flex items-center gap-1 rounded-lg border border-app-border bg-app-panel p-1">
+                <div className="inline-flex items-center gap-1 rounded-lg border border-app-border bg-app-panelSecondary p-1">
                   {(["fast", "normal", "deep"] as AnalysisMode[]).map((item) => (
                     <button
                       key={item}
@@ -160,8 +160,8 @@ export function ChessComImport({
 
 function Meta({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-lg border border-app-border bg-app-panel px-3 py-2.5">
-      <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-app-muted">{label}</div>
+    <div>
+      <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-app-faint">{label}</div>
       <div className="mt-1 truncate font-medium text-app-text">{value}</div>
     </div>
   );

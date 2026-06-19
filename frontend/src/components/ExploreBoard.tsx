@@ -140,10 +140,10 @@ export function ExploreBoard({ fen, orientation, onExit, title = "Play out the p
           : `${game.turn() === "w" ? "White" : "Black"} to move`;
 
   return (
-    <Card className="overflow-hidden">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-app-border px-5 py-4">
+    <Card>
+      <div className="flex flex-wrap items-center justify-between gap-3 pb-4">
         <div className="min-w-0">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-app-accent/80">{title}</p>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-app-faint">{title}</p>
           <p className="mt-1 font-mono text-sm text-app-text">{status}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -177,7 +177,7 @@ export function ExploreBoard({ fen, orientation, onExit, title = "Play out the p
         </div>
       </div>
 
-      <div className="px-4 pb-5 sm:px-5">
+      <div>
         <div className="mx-auto max-w-[560px] overflow-hidden rounded-lg border border-app-border">
           <Chessboard
             id="explore-board"
@@ -196,7 +196,7 @@ export function ExploreBoard({ fen, orientation, onExit, title = "Play out the p
         {error && <p className="mt-3 text-sm text-app-blunder">{error}</p>}
 
         {history.length > 0 && (
-          <p className="mt-3 break-words rounded-lg border border-app-border bg-app-panelSecondary/50 px-3 py-2 font-mono text-xs text-app-muted">
+          <p className="mt-3 break-words rounded-lg bg-app-panelSecondary px-3 py-2 font-mono text-xs text-app-muted">
             {history
               .map((san, i) => (i % 2 === 0 ? `${Math.floor(i / 2) + 1}. ${san}` : san))
               .join(" ")}

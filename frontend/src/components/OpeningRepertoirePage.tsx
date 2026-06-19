@@ -67,6 +67,13 @@ function allRows(repertoire: OpeningRepertoire) {
   ];
 }
 
+function hasInvalidOpeningName(row: OpeningRepertoireRow) {
+  const invalidNames = new Set(["undefined", "undeefined"]);
+  return [row.opening_name, row.opening_family].some((name) =>
+    invalidNames.has((name ?? "").trim().toLowerCase()),
+  );
+}
+
 export function OpeningRepertoirePage({
   loading,
   repertoire,
@@ -118,7 +125,7 @@ export function OpeningRepertoirePage({
         <CardHeader title="Opening Repertoire" eyebrow="Opening-specific performance">
           See which openings score best when you play White or Black.
         </CardHeader>
-        <div className="grid gap-3 px-5 pb-5 pt-4 lg:grid-cols-[1fr_120px_150px_auto_auto] lg:items-center">
+        <div className="grid gap-3 lg:grid-cols-[1fr_120px_150px_auto_auto] lg:items-center">
           <div className="relative">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-app-faint" />
             <input className={`${input} pl-9`} value={username} placeholder="Chess.com username" onChange={(event) => onUsernameChange(event.target.value)} />
@@ -147,8 +154,8 @@ export function OpeningRepertoirePage({
           <BestWorst rows={openings} />
           <MostPlayedChart whiteRows={grouped?.white ?? []} blackRows={grouped?.black ?? []} onSelect={setDetailFamily} />
           <Card>
-            <div className="grid gap-3 border-b border-app-border px-5 py-4 lg:grid-cols-[auto_1fr] lg:items-center">
-              <div className="inline-flex rounded-lg border border-app-border bg-app-panelSecondary/60 p-1">
+            <div className="grid gap-3 pb-4 lg:grid-cols-[auto_1fr] lg:items-center">
+              <div className="inline-flex rounded-lg border border-app-border bg-app-panelSecondary p-1">
                 {TABS.map((tab) => (
                   <SegmentButton key={tab.key} active={activeTab === tab.key} onClick={() => setActiveTab(tab.key)}>
                     {tab.label}
@@ -170,8 +177,8 @@ export function OpeningRepertoirePage({
         </>
       ) : (
         <Card>
-          <div className="flex flex-col items-center gap-3 px-5 py-12 text-center">
-            <div className="grid h-11 w-11 place-items-center rounded-full bg-app-accentSoft text-app-accent">
+          <div className="flex flex-col items-center gap-3 py-16 text-center">
+            <div className="grid h-11 w-11 place-items-center rounded-full bg-app-panelSecondary text-app-muted">
               <BookOpen className="h-5 w-5" />
             </div>
             <p className="text-sm text-app-muted">{loading ? "Reading public games and grouping openings..." : "Enter a Chess.com username to build your opening repertoire."}</p>
@@ -186,7 +193,11 @@ function groupRowsByFamily(rows: OpeningRepertoireRow[]) {
   const groups = new Map<string, OpeningRepertoireRow>();
 
   for (const row of rows) {
+    if (hasInvalidOpeningName(row)) continue;
+
     const family = openingFamily(row.opening_family, row.opening_name);
+    if (["undefined", "undeefined"].includes(family.trim().toLowerCase())) continue;
+
     const existing = groups.get(family);
 
     if (!existing) {
@@ -282,7 +293,7 @@ function TopSummary({ repertoire, whiteRows, blackRows }: { repertoire: OpeningR
   const black = [...blackRows].sort((a, b) => b.games - a.games)[0] ?? null;
 
   return (
-    <div className="grid gap-3 sm:grid-cols-3">
+    <div className="grid gap-6 sm:grid-cols-3 sm:divide-x sm:divide-app-border">
       <SummaryBlock label="Games Analyzed" primary={String(repertoire.summary.total_games)} mono />
       <SummaryBlock label="Most Played as White" primary={white?.opening_name ?? "-"} secondary={white ? `${white.games} games` : undefined} />
       <SummaryBlock label="Most Played as Black" primary={black?.opening_name ?? "-"} secondary={black ? `${black.games} games` : undefined} />
@@ -292,9 +303,9 @@ function TopSummary({ repertoire, whiteRows, blackRows }: { repertoire: OpeningR
 
 function SummaryBlock({ label, primary, secondary, mono = false }: { label: string; primary: string; secondary?: string; mono?: boolean }) {
   return (
-    <div className="min-w-0 rounded-xl border border-app-border bg-app-panel p-4 shadow-card">
-      <p className="text-xs font-medium uppercase tracking-wide text-app-muted">{label}</p>
-      <p className={`mt-2 truncate text-xl font-semibold text-app-text ${mono ? "font-mono" : ""}`}>{primary}</p>
+    <div className="min-w-0 sm:[&:not(:first-child)]:pl-6">
+      <p className="text-xs font-medium uppercase tracking-wide text-app-faint">{label}</p>
+      <p className={`mt-2 break-words text-xl font-semibold leading-snug text-app-text ${mono ? "font-mono" : ""}`}>{primary}</p>
       {secondary && <p className="mt-1 font-mono text-sm text-app-muted">{secondary}</p>}
     </div>
   );
@@ -308,13 +319,13 @@ function BestWorst({ rows }: { rows: OpeningRepertoireRow[] }) {
     <div className="grid gap-5 xl:grid-cols-2">
       <Card>
         <CardHeader title="Best Performing Openings" eyebrow="Strengths" />
-        <div className="px-5 py-5">
+        <div>
           <OpeningInsightList tone="good" rows={best} />
         </div>
       </Card>
       <Card>
         <CardHeader title="Needs Improvement" eyebrow="Study priorities" />
-        <div className="px-5 py-5">
+        <div>
           <OpeningInsightList tone="blunder" rows={worst} />
         </div>
       </Card>
@@ -336,13 +347,13 @@ function OpeningInsightList({ tone, rows }: { tone: "good" | "blunder"; rows: Op
       {rows.map((row) => (
         <div
           key={`${tone}-${row.id}`}
-          className="flex items-start gap-3 rounded-lg border border-app-border bg-app-panelSecondary/40 p-3"
+          className="flex items-start gap-3 border-b border-app-border py-3 last:border-b-0"
         >
           <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-full ${tintClass} ${iconClass}`}>
             <Icon className="h-4 w-4" />
           </span>
           <div className="min-w-0">
-            <p className="truncate text-sm font-medium text-app-text">{row.opening_name}</p>
+            <p className="break-words text-sm font-medium leading-snug text-app-text">{row.opening_name}</p>
             <p className="mt-1 font-mono text-xs text-app-muted">
               {fmt(row.win_rate, "%")} Win Rate - {row.games} Games
             </p>
@@ -382,35 +393,35 @@ function MostPlayedChart({
           </div>
         }
       />
-      <div className="px-5 py-5">
+      <div>
         <p className="mb-3 text-xs text-app-muted">Click a bar to open detailed stats for that opening.</p>
         <div className="cursor-pointer overflow-x-auto">
         <ResponsiveContainer width="100%" height={height}>
           <BarChart data={data} layout="vertical" margin={{ left: 12, right: 28, top: 8, bottom: 8 }} onClick={handleChartClick}>
-            <CartesianGrid stroke="#262a31" horizontal={false} />
-            <XAxis type="number" tick={{ fill: "#9aa0aa", fontSize: 11 }} axisLine={false} tickLine={false} allowDecimals={false} />
+            <CartesianGrid stroke="#222328" horizontal={false} />
+            <XAxis type="number" tick={{ fill: "#85868f", fontSize: 11 }} axisLine={false} tickLine={false} allowDecimals={false} />
             <YAxis
               type="category"
               dataKey="opening_name"
               width={260}
-              tick={{ fill: "#e6e8ec", fontSize: 12 }}
+              tick={{ fill: "#f3f3f5", fontSize: 12 }}
               axisLine={false}
               tickLine={false}
               interval={0}
             />
             <Tooltip
-              cursor={{ fill: "rgba(99,102,241,0.08)" }}
-              contentStyle={{ background: "#16181d", border: "1px solid #262a31", borderRadius: 8, color: "#e6e8ec" }}
-              labelStyle={{ color: "#e6e8ec" }}
-              itemStyle={{ color: "#e6e8ec" }}
+              cursor={{ fill: "rgba(200,161,90,0.08)" }}
+              contentStyle={{ background: "#191a1e", border: "1px solid #34363d", borderRadius: 10, color: "#f3f3f5", boxShadow: "0 16px 48px -16px rgba(0,0,0,0.7)" }}
+              labelStyle={{ color: "#f3f3f5" }}
+              itemStyle={{ color: "#f3f3f5" }}
               formatter={(value, name, props) => {
                 const payload = props.payload as { games: number };
                 if (name === "Total") return [`${value}`, "Total games"];
                 return [`${value}`, `${name} (${payload.games} total)`];
               }}
             />
-            <Bar dataKey="whiteGames" stackId="games" fill="#6366f1" barSize={22} name="As White" radius={[0, 0, 0, 0]} />
-            <Bar dataKey="blackGames" stackId="games" fill="#333a47" barSize={22} name="As Black" radius={[0, 4, 4, 0]} />
+            <Bar dataKey="whiteGames" stackId="games" fill="#c8a15a" barSize={22} name="As White" radius={[0, 0, 0, 0]} />
+            <Bar dataKey="blackGames" stackId="games" fill="#34363d" barSize={22} name="As Black" radius={[0, 4, 4, 0]} />
           </BarChart>
         </ResponsiveContainer>
         </div>
@@ -462,10 +473,10 @@ function OpeningList({ title, rows, search }: { title: string; rows: OpeningRepe
   const sorted = [...filtered].sort((a, b) => b.win_rate - a.win_rate || b.games - a.games || a.opening_name.localeCompare(b.opening_name));
 
   return (
-    <div className="px-5 py-5">
-      <h3 className="text-xs font-semibold uppercase tracking-wide text-app-muted">{title} - Best Win Rates</h3>
+    <div>
+      <h3 className="text-xs font-semibold uppercase tracking-wide text-app-faint">{title} - Best Win Rates</h3>
       {sorted.length ? (
-        <div className="mt-4 overflow-hidden rounded-lg border border-app-border divide-y divide-app-border">
+        <div className="mt-4 overflow-hidden rounded-lg divide-y divide-app-border">
           {sorted.map((row) => <OpeningRow key={row.id} row={row} />)}
         </div>
       ) : (
@@ -479,12 +490,12 @@ function OpeningList({ title, rows, search }: { title: string; rows: OpeningRepe
 
 function OpeningRow({ row }: { row: OpeningRepertoireRow }) {
   return (
-    <details className="group transition open:bg-app-accentSoft hover:bg-app-panelSecondary/50 open:hover:bg-app-accentSoft">
+    <details className="group transition open:bg-app-accentSoft hover:bg-app-panelSecondary open:hover:bg-app-accentSoft">
       <summary className="grid cursor-pointer list-none gap-3 px-4 py-4 md:grid-cols-[1fr_auto] md:items-center">
         <div className="flex min-w-0 items-center gap-3">
           <ChevronRight className="h-4 w-4 shrink-0 text-app-faint transition group-open:rotate-90" />
           <div className="min-w-0">
-            <p className="truncate text-sm font-medium text-app-text">{row.opening_name}</p>
+            <p className="break-words text-sm font-medium leading-snug text-app-text">{row.opening_name}</p>
             {row.eco && <p className="mt-0.5 text-xs text-app-muted">Code {row.eco}</p>}
           </div>
         </div>
@@ -493,7 +504,7 @@ function OpeningRow({ row }: { row: OpeningRepertoireRow }) {
           <SmallMetric label="Win Rate" value={fmt(row.win_rate, "%")} />
         </div>
       </summary>
-      <div className="grid gap-4 border-t border-app-border px-4 py-4 text-sm text-app-muted lg:grid-cols-3">
+      <div className="grid gap-4 px-4 py-4 text-sm text-app-muted lg:grid-cols-3">
         <DetailList title="Typical results" rows={row.typical_results.map((item) => `${item.result}: ${item.games} games (${item.frequency}%)`)} />
         <GameList title="Best examples" rows={row.best_example_games} />
         <GameList title="Recent games" rows={row.recent_games} />
@@ -573,15 +584,15 @@ function OpeningDetail({
 }) {
   return (
     <Card>
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-app-border px-5 py-4">
+      <div className="flex flex-wrap items-center justify-between gap-3 pb-5">
         <div className="flex min-w-0 items-center gap-3">
           <Button variant="ghost" size="sm" onClick={onBack}>
             <ArrowLeft className="h-4 w-4" />
             Back
           </Button>
           <div className="min-w-0">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-app-accent/80">Opening detail</p>
-            <h2 className="truncate text-lg font-semibold text-app-text">{row.opening_name}</h2>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-app-faint">Opening detail</p>
+            <h2 className="break-words text-lg font-semibold leading-snug text-app-text">{row.opening_name}</h2>
           </div>
         </div>
         <span className="rounded-full bg-app-panelSecondary px-3 py-1 font-mono text-xs text-app-muted ring-1 ring-inset ring-app-border">
@@ -589,7 +600,7 @@ function OpeningDetail({
         </span>
       </div>
 
-      <div className="px-5 py-6">
+      <div className="border-t border-app-border py-6">
         {/* Focal point: overall win/loss record */}
         <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-2">
           <div>
@@ -609,8 +620,8 @@ function OpeningDetail({
       </div>
 
       {/* Color split, shown inline */}
-      <div className="border-t border-app-border px-5 py-4">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-app-muted">By color</p>
+      <div className="border-t border-app-border py-5">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-app-faint">By color</p>
         <div className="mt-2 divide-y divide-app-border">
           <ColorSplitRow label="As White" row={whiteRow} />
           <ColorSplitRow label="As Black" row={blackRow} />
@@ -618,8 +629,8 @@ function OpeningDetail({
       </div>
 
       {/* Example games */}
-      <div className="border-t border-app-border px-5 py-5">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-app-muted">Example games</p>
+      <div className="border-t border-app-border py-5">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-app-faint">Example games</p>
         <div className="mt-4 grid gap-5 lg:grid-cols-3">
           <GameList title="Best examples" rows={row.best_example_games} />
           <GameList title="Worst examples" rows={row.worst_example_games} />

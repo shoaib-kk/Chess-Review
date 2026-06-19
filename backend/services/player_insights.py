@@ -146,37 +146,6 @@ def _response_bucket(game: chess.pgn.Game | None) -> tuple[str | None, str | Non
     return first, response
 
 
-def _mistake_categories(game: chess.pgn.Game | None, color: str | None, score: float, ply_count: int) -> Counter:
-    counts: Counter[str] = Counter()
-    if not game or not color:
-        return counts
-
-    if score >= 0.5:
-        return counts
-
-    sans = _move_sans(game, limit=80)
-    joined = " ".join(sans).lower()
-
-    if ply_count <= 20:
-        counts["Opening mistakes"] += 2
-    if ply_count >= 70:
-        counts["Endgame mistakes"] += 1
-    if "o-o" not in joined and "o-o-o" not in joined and ply_count > 20:
-        counts["King safety mistakes"] += 1
-    if any(token in joined for token in ["x", "+", "#"]):
-        counts["Missed tactics"] += 1
-    if any(token in joined for token in ["n", "q"]) and score == 0:
-        counts["Forks"] += 1
-    if any(token in joined for token in ["b", "r", "q"]) and score == 0:
-        counts["Pins"] += 1
-    if score == 0 and ply_count <= 45:
-        counts["Hanging pieces"] += 2
-    if score == 0 and ply_count > 45:
-        counts["Skewers"] += 1
-
-    return counts
-
-
 def _counter_rows(counter: Counter[str], ordered_labels: list[str] | None = None) -> list[dict[str, Any]]:
     if ordered_labels is None:
         items = counter.most_common()
@@ -246,7 +215,7 @@ def _trend_notes(records: list[dict[str, Any]]) -> list[str]:
     return notes
 
 
-def _profile(records: list[dict[str, Any]], white_openings: list[dict], black_openings: list[dict], mistake_rows: list[dict]) -> dict[str, Any]:
+def _profile(records: list[dict[str, Any]], white_openings: list[dict], black_openings: list[dict], top_phase: str | None) -> dict[str, Any]:
     avg_length = _safe_mean([item["ply_count"] / 2 for item in records]) or 0
     tactical = sum(item["captures_checks"] for item in records) / max(1, len(records))
     aggression = "aggressive" if tactical > 9 else "balanced" if tactical > 5 else "positional"
@@ -264,24 +233,18 @@ def _profile(records: list[dict[str, Any]], white_openings: list[dict], black_op
         "average_game_length": round(avg_length, 1),
         "preferred_openings": [row["opening_name"] for row in white_openings[:3]],
         "summary": summary,
-        "top_weakness": mistake_rows[0]["category"] if mistake_rows else None,
+        "top_weakness": f"{top_phase} play" if top_phase else None,
     }
 
 
-def _recommendations(strengths: list[str], weaknesses: list[str], mistake_rows: list[dict], worst_opening: str | None) -> list[str]:
+def _recommendations(strengths: list[str], weaknesses: list[str], top_phase: str | None, worst_opening: str | None) -> list[str]:
     recs = []
-    if mistake_rows:
-        top = mistake_rows[0]["category"]
-        if top == "Endgame mistakes":
-            recs.append("Study rook and basic pawn endgames.")
-        elif top == "Opening mistakes":
-            recs.append("Review your first 10 moves in your most-played openings.")
-        elif top == "King safety mistakes":
-            recs.append("Prioritize king safety and earlier castling in review sessions.")
-        elif top == "Missed tactics":
-            recs.append("Add short daily tactical puzzle sessions focused on forcing moves.")
-        elif top == "Hanging pieces":
-            recs.append("Before moving, scan whether any piece is undefended or newly attacked.")
+    if top_phase == "Endgame":
+        recs.append("Study rook and basic pawn endgames.")
+    elif top_phase == "Opening":
+        recs.append("Review your first 10 moves in your most-played openings.")
+    elif top_phase == "Middlegame":
+        recs.append("Work on middlegame planning — review your losses for the moment things slipped.")
     if worst_opening:
         recs.append(f"Review model games and common plans in {worst_opening}.")
     if not recs:
@@ -305,7 +268,6 @@ def get_player_insights(username: str, limit: int = 200, time_class: str | None 
     black_groups: dict[str, dict] = {}
     e4_responses: Counter[str] = Counter()
     d4_responses: Counter[str] = Counter()
-    mistake_counts: Counter[str] = Counter()
     phase_losses: Counter[str] = Counter()
     rating_points = []
 
@@ -373,11 +335,9 @@ def get_player_insights(username: str, limit: int = 200, time_class: str | None 
         if color == "Black" and first == "d4" and response:
             d4_responses[response] += 1
 
-        categories = _mistake_categories(pgn_game, color, score, ply_count)
-        mistake_counts.update(categories)
         phase = _phase_bucket(ply_count, score)
         if phase:
-            phase_losses[phase] += sum(categories.values()) or 1
+            phase_losses[phase] += 1
         if rating and raw.get("date"):
             rating_points.append({"date": raw["date"], "rating": rating})
 
@@ -388,7 +348,6 @@ def get_player_insights(username: str, limit: int = 200, time_class: str | None 
     white_openings = _opening_rows(white_groups, max(1, len(white_records)))
     black_openings = _opening_rows(black_groups, max(1, len(black_records)))
 
-    mistake_rows = _counter_rows(mistake_counts)
     phase_rows = _counter_rows(phase_losses, ["Opening", "Middlegame", "Endgame"])
 
     strongest = max(white_openings + black_openings, key=lambda row: row["win_rate"], default=None)
@@ -403,8 +362,7 @@ def get_player_insights(username: str, limit: int = 200, time_class: str | None 
     ]
     weaknesses = [
         f"Worst opening family: {weakest['opening_name']}." if weakest else "Not enough opening data for a clear weakness.",
-        f"Most common mistake: {mistake_rows[0]['category']}." if mistake_rows else "No recurring mistake category found.",
-        f"Lowest-performing phase: {lowest_phase}." if lowest_phase else "No clear phase weakness found.",
+        f"Most losses occur in the {lowest_phase.lower()}." if lowest_phase else "No clear phase weakness found.",
     ]
 
     trend_points = [
@@ -418,7 +376,7 @@ def get_player_insights(username: str, limit: int = 200, time_class: str | None 
         for item in reversed(records)
     ]
 
-    profile = _profile(records, white_openings, black_openings, mistake_rows)
+    profile = _profile(records, white_openings, black_openings, lowest_phase)
 
     return {
         "username": normalized,
@@ -448,15 +406,15 @@ def get_player_insights(username: str, limit: int = 200, time_class: str | None 
             "rating_points": list(reversed(rating_points)),
         },
         "mistakes": {
-            "categories": mistake_rows,
+            "categories": phase_rows,
             "by_phase": phase_rows,
-            "by_type": mistake_rows,
-            "top_weaknesses": mistake_rows[:3],
+            "by_type": phase_rows,
+            "top_weaknesses": phase_rows[:3],
         },
         "profile": {
             **profile,
             "strengths": strengths,
             "weaknesses": weaknesses,
-            "recommendations": _recommendations(strengths, weaknesses, mistake_rows, weakest["opening_name"] if weakest else None),
+            "recommendations": _recommendations(strengths, weaknesses, lowest_phase, weakest["opening_name"] if weakest else None),
         },
     }

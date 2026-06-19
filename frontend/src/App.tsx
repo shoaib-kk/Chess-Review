@@ -10,6 +10,7 @@ import {
   getHealth,
 } from "./api/client";
 import { AnalysisPanel } from "./components/AnalysisPanel";
+import { AnalysisProgress } from "./components/AnalysisProgress";
 import { AppShell } from "./components/AppShell";
 import { ChessboardPanel } from "./components/ChessBoardPanel";
 import { ChessComImport } from "./components/ChessComImport";
@@ -22,15 +23,25 @@ import { PlayerInsightsPage } from "./components/PlayerInsightsPage";
 import { PuzzlePage } from "./components/PuzzlePage";
 import { PgnInput } from "./components/PgnInput";
 import { SummaryStrip } from "./components/SummaryStrip";
+import { Surface } from "./components/ui/Surface";
 import { SAMPLE_GAME_PGN } from "./data/sampleGame";
 import type { AnalysisMode, ChessComGame, GameSummary, OpeningRepertoire, PlayerInsights, TimeClassFilter } from "./types";
 
 type AppMode = "home" | "chesscom" | "pgn" | "insights" | "repertoire" | "puzzles";
 const USERNAME_STORAGE_KEY = "cr_username";
+const NAV_COLLAPSED_KEY = "cr_nav_collapsed";
+
+/** Rough ply (half-move) count from a PGN, used to pace the analysis progress bar. */
+function estimatePlies(pgn: string): number {
+  const movetext = pgn.replace(/\[[^\]]*\]/g, "").replace(/\{[^}]*\}/g, "");
+  const fullMoves = (movetext.match(/\d+\.(?!\d)/g) ?? []).length;
+  return fullMoves > 0 ? fullMoves * 2 : 0;
+}
 
 export default function App() {
   const [apiStatus, setApiStatus] = useState<"checking" | "ok" | "down">("checking");
   const [activeMode, setActiveMode] = useState<AppMode>("home");
+  const [navCollapsed, setNavCollapsed] = useState(() => localStorage.getItem(NAV_COLLAPSED_KEY) === "1");
   const [sharedUsername, setSharedUsername] = useState(() => localStorage.getItem(USERNAME_STORAGE_KEY) ?? "");
   const [chessComAnalysisMode, setChessComAnalysisMode] = useState<AnalysisMode>("normal");
   const [playerInsightsLimit, setPlayerInsightsLimit] = useState(200);
@@ -48,6 +59,7 @@ export default function App() {
   const [flipped, setFlipped] = useState(false);
   const [reviewMyMovesOnly, setReviewMyMovesOnly] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [analysisInfo, setAnalysisInfo] = useState<{ plies: number; mode: AnalysisMode }>({ plies: 0, mode: "normal" });
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -61,6 +73,10 @@ export default function App() {
     if (trimmed) localStorage.setItem(USERNAME_STORAGE_KEY, trimmed);
     else localStorage.removeItem(USERNAME_STORAGE_KEY);
   }, [sharedUsername]);
+
+  useEffect(() => {
+    localStorage.setItem(NAV_COLLAPSED_KEY, navCollapsed ? "1" : "0");
+  }, [navCollapsed]);
 
   useEffect(() => {
     if (!summary) return;
@@ -107,6 +123,7 @@ export default function App() {
 
   async function handleAnalyze(pgn: string, depth: number, mode: AnalysisMode) {
     setLoading(true);
+    setAnalysisInfo({ plies: estimatePlies(pgn), mode });
     setError(null);
     try {
       const result = await analyzeGame({ pgn, depth, mode });
@@ -137,6 +154,7 @@ export default function App() {
 
   async function handleAnalyzeChessComGame(username: string, pgn: string, mode: AnalysisMode) {
     setLoading(true);
+    setAnalysisInfo({ plies: estimatePlies(pgn), mode });
     setError(null);
     try {
       setSharedUsername(username);
@@ -218,6 +236,16 @@ export default function App() {
     await handleAnalyze(SAMPLE_GAME_PGN, 16, "normal");
   }
 
+  function resumeReview() {
+    if (!summary) return;
+    setActiveMode(summary.user_username ? "chesscom" : "pgn");
+  }
+
+  async function reviewRecentGame(game: ChessComGame) {
+    setActiveMode("chesscom");
+    await handleAnalyzeChessComGame(sharedUsername, game.pgn, chessComAnalysisMode);
+  }
+
   return (
     <AppShell>
       <Header
@@ -226,9 +254,15 @@ export default function App() {
         username={sharedUsername.trim()}
         onLogout={handleLogout}
         onNewReview={summary ? startNewReview : undefined}
+        collapsed={navCollapsed}
+        onToggleCollapse={() => setNavCollapsed((value) => !value)}
       />
 
-      <main className="mx-auto w-full max-w-7xl px-4 py-6 lg:ml-60 lg:px-6">
+      <main
+        className={`mx-auto w-full max-w-7xl px-4 py-6 transition-[margin] duration-300 ease-spring lg:px-8 lg:py-8 ${
+          navCollapsed ? "lg:ml-[76px]" : "lg:ml-64"
+        }`}
+      >
         {error && (
           <div className="mb-6 flex items-start gap-3 rounded-lg bg-app-blunder/10 px-4 py-3 text-sm text-app-blunder ring-1 ring-app-blunder/30">
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={2} />
@@ -248,9 +282,16 @@ export default function App() {
             onOpenRepertoire={() => setActiveMode("repertoire")}
             onOpenPuzzles={() => setActiveMode("puzzles")}
             sampleLoading={loading}
+            activeReview={summary}
+            onResumeReview={resumeReview}
+            onReviewGame={reviewRecentGame}
           />
         ) : activeMode === "puzzles" ? (
                 <PuzzlePage username={sharedUsername} />
+              ) : loading && (activeMode === "chesscom" || activeMode === "pgn") ? (
+                <div className="mx-auto max-w-3xl py-6">
+                  <AnalysisProgress plies={analysisInfo.plies} mode={analysisInfo.mode} />
+                </div>
               ) : !summary ? (
               <div className="mx-auto max-w-3xl">
                 {activeMode === "chesscom" ? (
@@ -334,8 +375,8 @@ export default function App() {
                   onImportGame={importAnotherGame}
                 />
 
-                <div className="grid items-start gap-6 xl:grid-cols-[minmax(460px,48%)_minmax(0,52%)]">
-                  <div className="min-w-0">
+                <div className="grid items-start gap-5 xl:grid-cols-[minmax(460px,48%)_minmax(0,52%)]">
+                  <div className="min-w-0 xl:sticky xl:top-8">
                     <ChessboardPanel
                       summary={summary}
                       moveIndex={moveIndex}
@@ -346,19 +387,23 @@ export default function App() {
                     />
                   </div>
 
-                  <section className="min-w-0 overflow-hidden rounded-xl border border-app-border bg-app-panel py-2 shadow-card">
-                    <EvalGraphPanel summary={summary} currentIndex={moveIndex} onSelectMove={setMoveIndex} embedded />
-                    <div className="h-4" />
-                    <MoveListPanel
-                      summary={summary}
-                      currentIndex={moveIndex}
-                      onSelectMove={setMoveIndex}
-                      reviewMyMovesOnly={reviewMyMovesOnly}
-                      embedded
-                    />
-                    <div className="h-4" />
-                    <AnalysisPanel summary={summary} currentIndex={moveIndex} embedded />
-                  </section>
+                  <div className="grid min-w-0 gap-5">
+                    <Surface className="p-5 sm:p-6">
+                      <EvalGraphPanel summary={summary} currentIndex={moveIndex} onSelectMove={setMoveIndex} embedded />
+                    </Surface>
+                    <Surface className="p-5 sm:p-6">
+                      <AnalysisPanel summary={summary} currentIndex={moveIndex} embedded />
+                    </Surface>
+                    <Surface className="overflow-hidden p-5 sm:p-6">
+                      <MoveListPanel
+                        summary={summary}
+                        currentIndex={moveIndex}
+                        onSelectMove={setMoveIndex}
+                        reviewMyMovesOnly={reviewMyMovesOnly}
+                        embedded
+                      />
+                    </Surface>
+                  </div>
                 </div>
                 </>
                 )}

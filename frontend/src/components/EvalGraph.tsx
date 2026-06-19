@@ -9,6 +9,7 @@ import {
   YAxis,
 } from "recharts";
 import type { GameSummary, MoveClassification } from "../types";
+import { classificationMeta } from "../utils/classification";
 import { Card } from "./ui/Card";
 
 interface EvalGraphPanelProps {
@@ -17,13 +18,6 @@ interface EvalGraphPanelProps {
   onSelectMove: (index: number) => void;
   embedded?: boolean;
 }
-
-const COLORS: Record<MoveClassification, string> = {
-  Excellent: "#34d399",
-  Inaccuracy: "#fbbf24",
-  Mistake: "#fb923c",
-  Blunder: "#f43f5e",
-};
 
 function clampEval(value: number | null): number {
   if (value === null) return 0;
@@ -46,12 +40,12 @@ export function EvalGraphPanel({ summary, currentIndex, onSelectMove, embedded =
 
   const content = (
     <>
-      <div className="px-5 pb-2 pt-4">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-app-accent/80">Position trend</p>
-        <h2 className="mt-1 text-base font-semibold text-app-text">Evaluation</h2>
+      <div className="pb-2">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-app-faint">Position trend</p>
+        <h2 className="mt-1 text-lg font-semibold tracking-tight text-app-text">Evaluation</h2>
         <p className="mt-1 text-xs text-app-muted">Above zero favors White; below zero favors Black.</p>
       </div>
-      <div className="h-48 px-3 pb-4">
+      <div className="-ml-2 h-48">
         <ResponsiveContainer width="100%" height="100%">
           <LineChart
             data={data}
@@ -61,44 +55,45 @@ export function EvalGraphPanel({ summary, currentIndex, onSelectMove, embedded =
               if (typeof index === "number") onSelectMove(index);
             }}
           >
-            <CartesianGrid stroke="#262a33" strokeDasharray="3 6" vertical={false} />
-            <XAxis dataKey="index" tick={{ fill: "#8b93a1", fontSize: 11 }} tickLine={false} axisLine={false} />
+            <CartesianGrid stroke="#222328" strokeDasharray="3 6" vertical={false} />
+            <XAxis dataKey="index" tick={{ fill: "#85868f", fontSize: 11 }} tickLine={false} axisLine={false} />
             <YAxis
               domain={[-10, 10]}
               ticks={[-5, 0, 5]}
-              tick={{ fill: "#8b93a1", fontSize: 11 }}
+              tick={{ fill: "#85868f", fontSize: 11 }}
               tickLine={false}
               axisLine={false}
             />
             <Tooltip
-              cursor={{ stroke: "#6366f1", strokeWidth: 1, strokeDasharray: "4 4" }}
-              contentStyle={{ background: "#16181d", border: "1px solid #262a33", borderRadius: 12 }}
-              labelStyle={{ color: "#e7e9ee" }}
+              cursor={{ stroke: "#c8a15a", strokeWidth: 1, strokeDasharray: "4 4" }}
+              contentStyle={{ background: "#191a1e", border: "1px solid #34363d", borderRadius: 10, boxShadow: "0 16px 48px -16px rgba(0,0,0,0.7)" }}
+              labelStyle={{ color: "#f3f3f5" }}
               formatter={(value, _name, props) => [evalText(Number(value)), props.payload.label]}
             />
-            <ReferenceLine y={0} stroke="#8b93a155" />
-            {currentIndex >= 0 && <ReferenceLine x={currentIndex} stroke="#6366f1" strokeDasharray="4 4" />}
+            <ReferenceLine y={0} stroke="#85868f55" />
+            {currentIndex >= 0 && <ReferenceLine x={currentIndex} stroke="#c8a15a" strokeDasharray="4 4" />}
             <Line
               type="monotone"
               dataKey="eval"
-              stroke="#6366f1"
+              stroke="#c8a15a"
               strokeWidth={2}
               dot={(props) => {
                 const payload = props.payload as { classification: MoveClassification; index: number };
-                const important = payload.classification !== "Excellent";
+                const meta = classificationMeta(payload.classification);
+                const important = meta.isError || meta.isHighlight;
                 return (
                   <circle
                     key={payload.index}
                     cx={props.cx}
                     cy={props.cy}
                     r={important ? 5 : 2.5}
-                    fill={important ? COLORS[payload.classification] : "#5b6270"}
-                    stroke="#0e0f13"
+                    fill={important ? meta.color : "#5b6270"}
+                    stroke="#0a0a0c"
                     strokeWidth={1}
                   />
                 );
               }}
-              activeDot={{ r: 7, fill: "#6366f1", stroke: "#0e0f13", strokeWidth: 2 }}
+              activeDot={{ r: 7, fill: "#c8a15a", stroke: "#0a0a0c", strokeWidth: 2 }}
             />
           </LineChart>
         </ResponsiveContainer>

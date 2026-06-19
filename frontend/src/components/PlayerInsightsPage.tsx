@@ -6,9 +6,13 @@ import {
   ResponsiveContainer,
   Tooltip,
 } from "recharts";
-import { BarChart3, BookOpen, Filter, Search, Target, Trophy } from "lucide-react";
+import { Area, AreaChart, ResponsiveContainer as RC, Tooltip as TT, YAxis } from "recharts";
+import { BarChart3, BookOpen, Crosshair, Filter, Lightbulb, Search, Target, ThumbsUp, TrendingUp, Trophy } from "lucide-react";
 import { Button } from "./ui/Button";
 import { Card, CardHeader } from "./ui/Card";
+import { Delta } from "./ui/Delta";
+import { Sparkline } from "./ui/Sparkline";
+import { StatCard } from "./ui/StatCard";
 import { openingFamily } from "../utils/openingFamilies";
 
 interface PlayerInsightsPageProps {
@@ -51,16 +55,17 @@ function topOpenings(insights: PlayerInsights) {
     .slice(0, 3);
 }
 
-const PIE_COLORS = ["#6366f1", "#fbbf24", "#fb923c", "#f43f5e", "#9aa0aa", "#34d399", "#a78bfa", "#22d3ee"];
+const PIE_COLORS = ["#c8a15a", "#5cb585", "#34c9bb", "#dc8a45", "#dd5b52", "#d6b24a", "#9b9ca6", "#7c8aa5"];
 const TOOLTIP_STYLE = {
-  background: "#16181d",
-  border: "1px solid #262a31",
-  borderRadius: 8,
-  color: "#e6e8ec",
+  background: "#191a1e",
+  border: "1px solid #34363d",
+  borderRadius: 10,
+  color: "#f3f3f5",
+  boxShadow: "0 16px 48px -16px rgba(0,0,0,0.7)",
 };
 
 const inputBase =
-  "h-11 w-full rounded-lg border border-app-border bg-app-panelSecondary px-3 text-sm text-app-text outline-none transition placeholder:text-app-muted focus-visible:border-app-accent focus-visible:ring-2 focus-visible:ring-app-accent/50";
+  "h-11 w-full rounded-lg border border-app-border bg-app-bgInset px-3 text-sm text-app-text outline-none transition placeholder:text-app-faint focus-visible:border-app-accentLine focus-visible:ring-2 focus-visible:ring-app-accent/40";
 
 export function PlayerInsightsPage({
   loading,
@@ -86,7 +91,7 @@ export function PlayerInsightsPage({
         <CardHeader title="Player Insights" eyebrow="Chess.com history">
           A quick coach-style readout of your recent habits and study priorities.
         </CardHeader>
-        <div className="grid gap-3 px-5 pb-5 pt-4 lg:grid-cols-[1fr_120px_150px_auto_auto] lg:items-center">
+        <div className="grid gap-3 lg:grid-cols-[1fr_120px_150px_auto_auto] lg:items-center">
           <div className="relative">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-app-faint" />
             <input
@@ -133,8 +138,8 @@ export function PlayerInsightsPage({
 function EmptyState({ loading }: { loading: boolean }) {
   return (
     <Card>
-      <div className="flex flex-col items-center gap-3 px-5 py-12 text-center">
-        <div className="grid h-11 w-11 place-items-center rounded-full bg-app-accentSoft text-app-accent">
+      <div className="flex flex-col items-center gap-3 py-16 text-center">
+        <div className="grid h-11 w-11 place-items-center rounded-full bg-app-panelSecondary text-app-muted">
           <BarChart3 className="h-5 w-5" />
         </div>
         <p className="text-sm text-app-muted">
@@ -148,43 +153,148 @@ function EmptyState({ loading }: { loading: boolean }) {
 function InsightsReport({ insights }: { insights: PlayerInsights }) {
   const openings = topOpenings(insights);
   const hasAccuracy = insights.summary.games_with_accuracy > 0;
+  const s = insights.summary;
+  const perf = insights.performance;
+
+  const accuracyDelta =
+    perf.last_30.avg_accuracy != null && perf.last_90.avg_accuracy != null
+      ? perf.last_30.avg_accuracy - perf.last_90.avg_accuracy
+      : null;
+  const winRateDelta = perf.last_30.win_rate - perf.last_90.win_rate;
+  const ratingSeries = perf.rating_points.map((p) => p.rating);
+  const currentRating = ratingSeries.length ? ratingSeries[ratingSeries.length - 1] : null;
+  const ratingDelta = ratingSeries.length > 1 ? currentRating! - ratingSeries[0] : null;
+  const accuracySeries = perf.trend_points.map((p) => p.accuracy).filter((n) => Number.isFinite(n));
 
   return (
     <div className="grid gap-5">
-      <Card>
-        <CardHeader title="Summary" eyebrow="Overview" />
-        <div className="grid gap-3 px-5 py-5 sm:grid-cols-3">
-          <Metric label="Win rate" value={fmt(insights.summary.win_rate, "%")} icon={Trophy} tone="good" />
-          <Metric label="Games" value={String(insights.summary.games_analyzed)} icon={BarChart3} />
-          <Metric
-            label="Accuracy"
-            value={hasAccuracy ? fmt(insights.summary.average_accuracy, "%") : "Not yet"}
-            icon={Target}
-            tone="accent"
-            sub={
-              hasAccuracy
-                ? `Chess.com review - ${insights.summary.games_with_accuracy} of ${insights.summary.games_analyzed} games`
-                : "No analyzed games yet - review one to see accuracy."
-            }
-          />
-        </div>
-      </Card>
+      {/* KPI row */}
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <StatCard
+          label="Win rate"
+          value={fmt(s.win_rate)}
+          unit="%"
+          icon={Trophy}
+          delta={winRateDelta}
+          deltaSuffix="%"
+          caption={`W ${fmt(s.white_win_rate)}% · B ${fmt(s.black_win_rate)}%`}
+        />
+        <StatCard
+          label="Accuracy"
+          value={hasAccuracy ? fmt(s.average_accuracy) : "—"}
+          unit={hasAccuracy ? "%" : undefined}
+          icon={Target}
+          delta={accuracyDelta}
+          deltaSuffix="%"
+          caption={hasAccuracy ? `${s.games_with_accuracy} analysed` : "review a game"}
+        />
+        <StatCard
+          label="Rating"
+          value={currentRating ?? "—"}
+          icon={TrendingUp}
+          delta={ratingDelta}
+          caption={currentRating ? "latest" : "no data"}
+          visual={ratingSeries.length > 1 ? <Sparkline data={ratingSeries} width={72} height={30} /> : undefined}
+        />
+        <StatCard label="Avg. cp loss" value={fmt(s.average_cp_loss)} icon={Crosshair} caption="lower is better" />
+      </div>
 
-      <Card>
-        <CardHeader title="Most Common Openings" eyebrow="Repertoire" />
-        <div className="px-5 py-5">
+      {/* Performance trend */}
+      {accuracySeries.length > 1 && (
+        <Card>
+          <div className="flex items-end justify-between pb-3">
+            <CardHeader title="Accuracy trend" eyebrow="Recent form" />
+            <div className="flex items-center gap-2 pb-4 text-xs text-app-muted">
+              <Delta value={accuracyDelta} suffix="%" />
+              <span>last 30 vs 90 days</span>
+            </div>
+          </div>
+          <div className="h-44 w-full">
+            <RC width="100%" height="100%">
+              <AreaChart data={accuracySeries.map((value, i) => ({ i, value }))} margin={{ top: 6, right: 4, bottom: 0, left: 0 }}>
+                <defs>
+                  <linearGradient id="insightTrend" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#c8a15a" stopOpacity={0.26} />
+                    <stop offset="100%" stopColor="#c8a15a" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <YAxis hide domain={["dataMin - 3", "dataMax + 3"]} />
+                <TT contentStyle={TOOLTIP_STYLE} labelFormatter={() => ""} formatter={(v: number) => [`${v.toFixed(1)}%`, "Accuracy"]} />
+                <Area type="monotone" dataKey="value" stroke="#c8a15a" strokeWidth={2} fill="url(#insightTrend)" dot={false} />
+              </AreaChart>
+            </RC>
+          </div>
+        </Card>
+      )}
+
+      <div className="grid gap-5 lg:grid-cols-2">
+        <Card>
+          <CardHeader title="Most common openings" eyebrow="Repertoire" />
           <InsightList rows={openings.map((row) => `${row.opening_name} - ${row.games} games`)} />
-        </div>
-      </Card>
+        </Card>
 
-      <Card>
-        <CardHeader title="Likely Trouble Spots" eyebrow="Estimated from results">
-          These are rough patterns from public game data, not a full engine diagnosis.
-        </CardHeader>
-        <div className="px-5 py-5">
+        <Card>
+          <CardHeader title="Likely trouble spots" eyebrow="Estimated from results">
+            Rough patterns from public game data, not a full engine diagnosis.
+          </CardHeader>
           <MistakePie data={insights.mistakes.by_phase} />
-        </div>
-      </Card>
+        </Card>
+      </div>
+
+      <ProfileCard insights={insights} />
+    </div>
+  );
+}
+
+function ProfileCard({ insights }: { insights: PlayerInsights }) {
+  const { profile } = insights;
+  const hasContent =
+    profile.style || profile.strengths.length || profile.weaknesses.length || profile.recommendations.length;
+  if (!hasContent) return null;
+
+  return (
+    <Card>
+      <CardHeader title={profile.style ? `Your style: ${profile.style}` : "Coach's read"} eyebrow="Profile">
+        {profile.summary || "A coach-style read of your habits and what to work on next."}
+      </CardHeader>
+      <div className="grid gap-5 sm:grid-cols-3">
+        <ProfileColumn icon={ThumbsUp} title="Strengths" tone="text-app-good" items={profile.strengths} />
+        <ProfileColumn icon={Crosshair} title="Weaknesses" tone="text-app-mistake" items={profile.weaknesses} />
+        <ProfileColumn icon={Lightbulb} title="Work on next" tone="text-app-accent" items={profile.recommendations} />
+      </div>
+    </Card>
+  );
+}
+
+function ProfileColumn({
+  icon: Icon,
+  title,
+  tone,
+  items,
+}: {
+  icon: typeof BarChart3;
+  title: string;
+  tone: string;
+  items: string[];
+}) {
+  return (
+    <div className="rounded-xl border border-app-border bg-app-bgInset/60 p-4">
+      <div className={`flex items-center gap-2 text-sm font-semibold ${tone}`}>
+        <Icon className="h-4 w-4" />
+        {title}
+      </div>
+      {items.length ? (
+        <ul className="mt-3 space-y-2">
+          {items.slice(0, 4).map((item, i) => (
+            <li key={i} className="flex gap-2 text-sm leading-relaxed text-app-muted">
+              <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-current opacity-50" />
+              <span>{item}</span>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="mt-3 text-sm text-app-subtle">Not enough data yet.</p>
+      )}
     </div>
   );
 }
@@ -207,8 +317,8 @@ function MistakePie({ data }: { data: Array<{ category: string; count: number; p
           </Pie>
           <Tooltip
             contentStyle={TOOLTIP_STYLE}
-            labelStyle={{ color: "#e6e8ec" }}
-            itemStyle={{ color: "#e6e8ec" }}
+            labelStyle={{ color: "#ededf0" }}
+            itemStyle={{ color: "#ededf0" }}
             formatter={(_value, name, props) => {
               const percentage = Number(props.payload?.percentage ?? 0);
               return [`${Math.round(percentage)}%`, name];
@@ -220,7 +330,7 @@ function MistakePie({ data }: { data: Array<{ category: string; count: number; p
         {filtered.map((row, index) => (
           <div
             key={row.category}
-            className="grid grid-cols-[12px_1fr_auto] items-center gap-3 rounded-lg border border-app-border bg-app-panelSecondary/40 px-3 py-2 text-sm"
+            className="grid grid-cols-[12px_1fr_auto] items-center gap-3 border-b border-app-border py-2 text-sm last:border-b-0"
           >
             <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: PIE_COLORS[index % PIE_COLORS.length] }} />
             <span className="text-app-text">{row.category}</span>
@@ -232,38 +342,12 @@ function MistakePie({ data }: { data: Array<{ category: string; count: number; p
   );
 }
 
-function Metric({
-  label,
-  value,
-  icon: Icon,
-  tone = "default",
-  sub,
-}: {
-  label: string;
-  value: string;
-  icon: typeof BarChart3;
-  tone?: "default" | "good" | "accent";
-  sub?: string;
-}) {
-  const toneClass = tone === "good" ? "text-app-good" : tone === "accent" ? "text-app-accent" : "text-app-faint";
-  return (
-    <div className="rounded-lg border border-app-border bg-app-panelSecondary/40 p-4">
-      <div className="flex items-center justify-between">
-        <p className="text-xs font-medium uppercase tracking-wide text-app-muted">{label}</p>
-        <Icon className={`h-4 w-4 ${toneClass}`} />
-      </div>
-      <p className="mt-2 font-mono text-2xl font-semibold text-app-text">{value}</p>
-      {sub && <p className="mt-1 text-[11px] text-app-muted">{sub}</p>}
-    </div>
-  );
-}
-
 function InsightList({ rows }: { rows: string[] }) {
   if (!rows.length) {
     return <p className="text-sm text-app-muted">No openings to show yet.</p>;
   }
   return (
-    <ol className="overflow-hidden rounded-lg border border-app-border divide-y divide-app-border">
+    <ol className="overflow-hidden rounded-lg divide-y divide-app-border">
       {rows.slice(0, 5).map((row, index) => (
         <li
           key={`opening-${row}`}

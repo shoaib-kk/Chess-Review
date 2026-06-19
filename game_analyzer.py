@@ -12,9 +12,12 @@ from pgn_parser import load_game_from_pgn_string, extract_headers, iter_position
 from stockfish_engine import StockfishEngine
 
 
+# Depth caps per mode. "normal" is the default the UI uses; depth 12 was too
+# shallow to see the short tactics amateurs actually blunder, so it would happily
+# label a losing move "Excellent". 16 is a reasonable accuracy/speed balance.
 ANALYSIS_MODES = {
-    "fast": {"max_depth": 8, "pv_limit": 2},
-    "normal": {"max_depth": 12, "pv_limit": 5},
+    "fast": {"max_depth": 10, "pv_limit": 2},
+    "normal": {"max_depth": 16, "pv_limit": 4},
     "deep": {"max_depth": 24, "pv_limit": 8},
 }
 
@@ -25,6 +28,55 @@ def _cp_loss(eval_before: Optional[float], eval_after: Optional[float]) -> Optio
     mover_eval_after = -eval_after
     loss = eval_before - mover_eval_after
     return max(0.0, loss)
+
+
+_PIECE_VALUES = {
+    chess.PAWN: 1,
+    chess.KNIGHT: 3,
+    chess.BISHOP: 3,
+    chess.ROOK: 5,
+    chess.QUEEN: 9,
+    chess.KING: 0,
+}
+
+
+def _material(board: chess.Board, color: bool) -> int:
+    return sum(
+        _PIECE_VALUES[piece.piece_type]
+        for piece in board.piece_map().values()
+        if piece.color == color
+    )
+
+
+def _is_sacrifice(board_before: chess.Board, pv_san: list) -> bool:
+    """Heuristic: does the best line give up material the mover never wins back?
+
+    Only used to upgrade a "Best" move to "Brilliant". We replay the engine's
+    principal variation (which begins with the played/best move) and check
+    whether the mover ends up materially down. Conservative on purpose: a false
+    "Brilliant" is worse than a missed one.
+    """
+    if not pv_san:
+        return False
+    mover = board_before.turn
+    start_balance = _material(board_before, mover) - _material(board_before, not mover)
+
+    board = board_before.copy()
+    played = 0
+    for san in pv_san:
+        try:
+            board.push_san(san)
+        except (ValueError, AssertionError):
+            break
+        played += 1
+        if played >= 8:
+            break
+    if played == 0:
+        return False
+
+    end_balance = _material(board, mover) - _material(board, not mover)
+    # Mover ended at least a minor piece down relative to where they started.
+    return (start_balance - end_balance) >= 2
 
 
 def _mode_config(mode: str, requested_depth: int) -> dict:
@@ -122,7 +174,20 @@ def analyze_pgn(
             after = position_results[idx]
 
             cp_loss = _cp_loss(before["eval"], after["eval"])
-            classification = classify_move(cp_loss if cp_loss is not None else 0)
+
+            best_san = before["best_move"]
+            is_best = best_san is not None and san == best_san
+            is_book = idx <= summary.opening_matched_plies
+            is_sacrifice = _is_sacrifice(board_before, before["pv"]) if is_best else False
+
+            classification = classify_move(
+                eval_before=before["eval"],
+                eval_after=after["eval"],
+                cp_loss=cp_loss,
+                is_book=is_book,
+                is_best_move=is_best,
+                is_sacrifice=is_sacrifice,
+            )
 
             analysis = MoveAnalysis(
                 move_number=move_number,

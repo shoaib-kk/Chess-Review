@@ -32,6 +32,7 @@ def ensure_tables() -> None:
                 best_move_uci TEXT,
                 pv TEXT,
                 cp_loss REAL,
+                eval_before REAL,
                 classification TEXT,
                 solved INTEGER NOT NULL DEFAULT 0,
                 UNIQUE(username, game_url, move_number)
@@ -44,6 +45,13 @@ def ensure_tables() -> None:
                 PRIMARY KEY (username, game_url)
             );
         """)
+        columns = {row["name"] for row in conn.execute("PRAGMA table_info(puzzles)")}
+        if "eval_before" not in columns:
+            conn.execute("ALTER TABLE puzzles ADD COLUMN eval_before REAL")
+            # Puzzles are a derived cache. Old rows cannot be filtered reliably
+            # because they predate the stored player-POV evaluation.
+            conn.execute("DELETE FROM puzzles")
+            conn.execute("DELETE FROM analyzed_games")
 
 
 def get_analyzed_urls(username: str) -> set[str]:
@@ -83,17 +91,18 @@ def save_puzzle(
     best_move_uci: str | None,
     pv: list[str],
     cp_loss: float,
+    eval_before: float,
     classification: str,
 ) -> None:
     with _connect() as conn:
         conn.execute(
             """INSERT OR IGNORE INTO puzzles
                (username, game_url, game_date, move_number, color, fen,
-                played_move, best_move, best_move_uci, pv, cp_loss, classification)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                 played_move, best_move, best_move_uci, pv, cp_loss, eval_before, classification)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 username, game_url, game_date, move_number, color, fen,
-                played_move, best_move, best_move_uci, json.dumps(pv), cp_loss, classification,
+                played_move, best_move, best_move_uci, json.dumps(pv), cp_loss, eval_before, classification,
             ),
         )
 
@@ -154,7 +163,8 @@ def get_puzzles(
     diff_sql, diff_params = _difficulty_clause(difficulty)
     with _connect() as conn:
         rows = conn.execute(
-            f"""SELECT * FROM puzzles WHERE username = ?{phase_sql}{diff_sql}
+            f"""SELECT * FROM puzzles
+                WHERE username = ? AND eval_before >= 0{phase_sql}{diff_sql}
                ORDER BY cp_loss DESC LIMIT ? OFFSET ?""",
             (username, *phase_params, *diff_params, limit, offset),
         ).fetchall()
@@ -170,7 +180,7 @@ def get_puzzles(
 def get_puzzle_count(username: str) -> int:
     with _connect() as conn:
         return conn.execute(
-            "SELECT COUNT(*) FROM puzzles WHERE username = ?", (username,)
+            "SELECT COUNT(*) FROM puzzles WHERE username = ? AND eval_before >= 0", (username,)
         ).fetchone()[0]
 
 
@@ -179,7 +189,7 @@ def get_phase_counts(username: str) -> dict[str, int]:
     counts = {"all": 0, "opening": 0, "middlegame": 0, "endgame": 0}
     with _connect() as conn:
         rows = conn.execute(
-            "SELECT move_number FROM puzzles WHERE username = ?", (username,)
+            "SELECT move_number FROM puzzles WHERE username = ? AND eval_before >= 0", (username,)
         ).fetchall()
     for row in rows:
         move_number = row["move_number"] or 0

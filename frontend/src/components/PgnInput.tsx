@@ -22,14 +22,14 @@ export function PgnInput({ loading, onAnalyze }: PgnInputProps) {
   };
 
   return (
-    <Card className="overflow-hidden">
+    <Card>
       <CardHeader title="Paste or upload a game" eyebrow="Manual review">
         Paste a PGN from Chess.com, Lichess, or an over-the-board game. No username needed.
       </CardHeader>
 
-      <div className="px-5 pb-5">
+      <div>
         <div className="mb-3 flex justify-end">
-          <label className="inline-flex h-9 cursor-pointer items-center justify-center gap-1.5 rounded-lg border border-app-border bg-app-panelSecondary/60 px-3 text-sm font-medium text-app-muted transition hover:bg-app-panelHover hover:text-app-text">
+          <label className="inline-flex h-9 cursor-pointer items-center justify-center gap-1.5 rounded-lg border border-app-border bg-app-panelSecondary px-3 text-sm font-medium text-app-muted transition hover:bg-app-panelHover hover:text-app-text">
             <Upload className="h-4 w-4" strokeWidth={2} />
             Upload PGN
             <input
@@ -53,7 +53,7 @@ export function PgnInput({ loading, onAnalyze }: PgnInputProps) {
         />
 
         <div className="mt-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="inline-flex items-center gap-1 rounded-lg border border-app-border bg-app-panelSecondary/40 p-1">
+          <div className="inline-flex items-center gap-1 rounded-lg border border-app-border bg-app-panelSecondary p-1">
             {(["fast", "normal", "deep"] as AnalysisMode[]).map((item) => (
               <button
                 key={item}

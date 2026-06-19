@@ -1,4 +1,13 @@
-export type MoveClassification = "Excellent" | "Inaccuracy" | "Mistake" | "Blunder";
+export type MoveClassification =
+  | "Book"
+  | "Brilliant"
+  | "Best"
+  | "Excellent"
+  | "Good"
+  | "Inaccuracy"
+  | "Mistake"
+  | "Miss"
+  | "Blunder";
 export type AnalysisMode = "fast" | "normal" | "deep";
 export type TimeClassFilter = "rapid" | "blitz" | "bullet" | "";
 

@@ -1,20 +1,25 @@
-import { Chess } from "chess.js";
+import { Chess, type Square } from "chess.js";
 import {
   AlertTriangle,
   Check,
   ChevronLeft,
   ChevronRight,
   Lightbulb,
-  Play,
   Puzzle as PuzzleIcon,
   Search,
   Swords,
   Target,
 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { Chessboard } from "react-chessboard";
-import { apiErrorMessage, fetchPuzzles, markPuzzleSolved, triggerPuzzleAnalysis } from "../api/client";
-import type { Puzzle, PuzzleDifficultyFilter, PuzzlePhaseFilter, PuzzleProgress } from "../types";
+import {
+  apiErrorMessage,
+  fetchPuzzles,
+  markPuzzleSolved,
+  requestEngineMove,
+  triggerPuzzleAnalysis,
+} from "../api/client";
+import type { Puzzle, PuzzlePhaseFilter, PuzzleProgress } from "../types";
 import { ExploreBoard } from "./ExploreBoard";
 import { Badge } from "./ui/Badge";
 import { Button } from "./ui/Button";
@@ -24,9 +29,28 @@ interface PuzzlePageProps {
   username: string;
 }
 
-type PuzzleTheme = "all" | "mate" | "fork" | "pin";
-
 const POLL_INTERVAL_MS = 4000;
+
+// Win-chance sigmoid (matches the backend) for comparing alternative solutions.
+const WIN_CHANCE_K = 0.00368208;
+function winChance(cp: number): number {
+  const bounded = Math.max(-4000, Math.min(4000, cp));
+  return 50 + 50 * (2 / (1 + Math.exp(-WIN_CHANCE_K * bounded)) - 1);
+}
+
+function randomSeed() {
+  return Math.floor(Math.random() * 0x7fffffff);
+}
+
+function shuffledPuzzles(puzzles: Puzzle[], seed: number) {
+  const randomRank = (id: number) => {
+    let value = (id ^ seed) | 0;
+    value = Math.imul(value ^ (value >>> 16), 0x45d9f3b);
+    value = Math.imul(value ^ (value >>> 16), 0x45d9f3b);
+    return (value ^ (value >>> 16)) >>> 0;
+  };
+  return [...puzzles].sort((a, b) => randomRank(a.id) - randomRank(b.id));
+}
 
 const PHASE_OPTIONS: Array<{ value: PuzzlePhaseFilter; label: string; help: string }> = [
   { value: "all", label: "Any phase", help: "Use the full set." },
@@ -35,36 +59,8 @@ const PHASE_OPTIONS: Array<{ value: PuzzlePhaseFilter; label: string; help: stri
   { value: "endgame", label: "Endgame", help: "Conversion moments." },
 ];
 
-const THEME_OPTIONS: Array<{ value: PuzzleTheme; label: string; help: string }> = [
-  { value: "all", label: "Any theme", help: "All tactical misses." },
-  { value: "mate", label: "Mate", help: "Checks and mating threats." },
-  { value: "fork", label: "Fork", help: "Forcing checks and attacks." },
-  { value: "pin", label: "Pin", help: "Pressure on pinned pieces." },
-];
-
-const DIFFICULTY_OPTIONS: Array<{ value: PuzzleDifficultyFilter; label: string; help: string }> = [
-  { value: "all", label: "Mixed", help: "Mistakes and blunders." },
-  { value: "mistakes", label: "Easier", help: "Smaller misses first." },
-  { value: "blunders", label: "Hard swings", help: "Big evaluation drops." },
-];
-
-function themeMatches(puzzle: Puzzle, theme: PuzzleTheme) {
-  if (theme === "all") return true;
-  if (theme === "mate") return puzzle.best_move.includes("#") || puzzle.pv.some((move) => move.includes("#"));
-  if (theme === "fork") return puzzle.best_move.includes("+") || /^[NQBR]/.test(puzzle.best_move);
-  if (theme === "pin") return /^[BQRR]/.test(puzzle.best_move) || puzzle.pv.some((move) => /^[BQRR]/.test(move));
-  return true;
-}
-
-function filterByTheme(puzzles: Puzzle[], theme: PuzzleTheme) {
-  const filtered = puzzles.filter((puzzle) => themeMatches(puzzle, theme));
-  return filtered.length ? filtered : puzzles;
-}
-
 export function PuzzlePage({ username }: PuzzlePageProps) {
   const [phase, setPhase] = useState<PuzzlePhaseFilter>("all");
-  const [theme, setTheme] = useState<PuzzleTheme>("all");
-  const [difficulty, setDifficulty] = useState<PuzzleDifficultyFilter>("all");
   const [puzzles, setPuzzles] = useState<Puzzle[]>([]);
   const [progress, setProgress] = useState<PuzzleProgress>({ analyzed: 0, total: 0, running: false, puzzle_count: 0 });
   const [index, setIndex] = useState(0);
@@ -72,6 +68,7 @@ export function PuzzlePage({ username }: PuzzlePageProps) {
   const [trainingStarted, setTrainingStarted] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const shuffleSeedRef = useRef(randomSeed());
   const trimmedUsername = username.trim();
 
   function stopPoll() {
@@ -79,15 +76,14 @@ export function PuzzlePage({ username }: PuzzlePageProps) {
     pollRef.current = null;
   }
 
-  async function load(shouldShowLoading = false) {
+  async function load(shouldShowLoading = false, selectedPhase = phase) {
     if (!trimmedUsername) return;
     if (shouldShowLoading) setLoading(true);
     try {
       const data = await fetchPuzzles(trimmedUsername, {
-        phase: phase === "all" ? undefined : phase,
-        difficulty: difficulty === "all" ? undefined : difficulty,
+        phase: selectedPhase === "all" ? undefined : selectedPhase,
       });
-      setPuzzles(filterByTheme(data.puzzles, theme));
+      setPuzzles(shuffledPuzzles(data.puzzles, shuffleSeedRef.current));
       setProgress(data.progress);
       if (!data.progress.running) stopPoll();
     } catch (err) {
@@ -101,16 +97,11 @@ export function PuzzlePage({ username }: PuzzlePageProps) {
     stopPoll();
     setError(null);
     setIndex(0);
+    shuffleSeedRef.current = randomSeed();
     setTrainingStarted(false);
     setPuzzles([]);
     setProgress({ analyzed: 0, total: 0, running: false, puzzle_count: 0 });
   }, [trimmedUsername]);
-
-  useEffect(() => {
-    if (!trainingStarted) return;
-    setIndex(0);
-    load(true);
-  }, [phase, difficulty, theme]);
 
   useEffect(() => () => stopPoll(), []);
 
@@ -118,23 +109,20 @@ export function PuzzlePage({ username }: PuzzlePageProps) {
     if (!progress.running) stopPoll();
   }, [progress.running]);
 
-  async function startTraining() {
+  async function handlePhaseChange(selectedPhase: PuzzlePhaseFilter) {
     if (!trimmedUsername) return;
+    shuffleSeedRef.current = randomSeed();
+    setPhase(selectedPhase);
+    setIndex(0);
+    setPuzzles([]);
     setTrainingStarted(true);
-    setError(null);
-    await load(true);
-  }
-
-  async function handleAnalyzeMore() {
-    if (!trimmedUsername) return;
     try {
       setError(null);
       await triggerPuzzleAnalysis(trimmedUsername);
-      setTrainingStarted(true);
       setProgress((p) => ({ ...p, running: true, total: Math.max(p.total, 200) }));
       stopPoll();
-      pollRef.current = setInterval(() => load(false), POLL_INTERVAL_MS);
-      await load(true);
+      pollRef.current = setInterval(() => load(false, selectedPhase), POLL_INTERVAL_MS);
+      await load(true, selectedPhase);
     } catch (err) {
       setError(apiErrorMessage(err));
     }
@@ -153,8 +141,8 @@ export function PuzzlePage({ username }: PuzzlePageProps) {
         <CardHeader title="Puzzles" eyebrow="Personal tactics">
           Enter your Chess.com username on Home to build puzzles from your public games.
         </CardHeader>
-        <div className="flex flex-col items-center gap-3 px-5 py-12 text-center">
-          <div className="grid h-11 w-11 place-items-center rounded-full bg-app-accentSoft text-app-accent">
+        <div className="flex flex-col items-center gap-3 py-16 text-center">
+          <div className="grid h-11 w-11 place-items-center rounded-full bg-app-panelSecondary text-app-muted">
             <PuzzleIcon className="h-5 w-5" />
           </div>
           <p className="max-w-md text-sm text-app-muted">
@@ -167,12 +155,12 @@ export function PuzzlePage({ username }: PuzzlePageProps) {
 
   return (
     <div className="grid gap-5">
-      <Card className="overflow-hidden">
+      <Card>
         <CardHeader title="Puzzle Training" eyebrow="From your past games">
-          Pick what you want to practice, then start a focused set built from your own mistakes.
+          Select a phase to immediately build a focused set from your own mistakes.
         </CardHeader>
 
-        <div className="px-5 pb-5">
+        <div>
           {error && (
             <div className="mb-4 flex items-start gap-3 rounded-lg bg-app-blunder/10 px-4 py-3 text-sm text-app-blunder ring-1 ring-app-blunder/30">
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={2} />
@@ -180,30 +168,13 @@ export function PuzzlePage({ username }: PuzzlePageProps) {
             </div>
           )}
 
-          <div className="grid gap-4 lg:grid-cols-3">
-            <OptionGroup title="Phase" options={PHASE_OPTIONS} value={phase} onChange={setPhase} />
-            <OptionGroup title="Theme" options={THEME_OPTIONS} value={theme} onChange={setTheme} />
-            <OptionGroup title="Difficulty" options={DIFFICULTY_OPTIONS} value={difficulty} onChange={setDifficulty} />
-          </div>
-
-          <div className="mt-5 flex flex-col gap-3 rounded-lg border border-app-border bg-app-panelSecondary/40 p-4 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <p className="text-sm font-medium text-app-text">Train from real game mistakes</p>
-              <p className="mt-1 text-xs text-app-muted">
-                Building fresh puzzles analyzes up to 200 games and can take a minute.
-              </p>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <Button variant="secondary" disabled={loading || progress.running} onClick={startTraining}>
-                <Play className="h-4 w-4" />
-                {loading ? "Loading..." : "Start"}
-              </Button>
-              <Button variant="primary" disabled={loading || progress.running} onClick={handleAnalyzeMore}>
-                <Swords className="h-4 w-4" />
-                {progress.running ? "Building..." : "Build puzzles"}
-              </Button>
-            </div>
-          </div>
+          <OptionGroup
+            title="Phase of the game"
+            options={PHASE_OPTIONS}
+            value={phase}
+            onChange={handlePhaseChange}
+            disabled={loading || progress.running}
+          />
 
           {(progress.running || progress.total > 0) && (
             <div className="mt-4 rounded-lg border border-app-accent/30 bg-app-accentSoft px-4 py-3">
@@ -215,11 +186,17 @@ export function PuzzlePage({ username }: PuzzlePageProps) {
                 </span>
                 <span>{progress.puzzle_count} puzzle{progress.puzzle_count !== 1 ? "s" : ""} found</span>
               </div>
-              <div className="h-2.5 w-full overflow-hidden rounded-full bg-app-panelSecondary">
+              <div className="h-2.5 w-full overflow-hidden rounded-full bg-app-bgInset ring-1 ring-inset ring-app-border">
                 <div
-                  className="h-full rounded-full bg-app-accent transition-all duration-500"
+                  className="relative h-full rounded-full bg-gradient-to-r from-app-accent/80 to-app-accent transition-all duration-500"
                   style={{ width: progress.total > 0 ? `${Math.min(100, (progress.analyzed / progress.total) * 100)}%` : "8%" }}
-                />
+                >
+                  {progress.running && (
+                    <span className="absolute inset-0 overflow-hidden rounded-full">
+                      <span className="absolute inset-y-0 -left-full w-full animate-shimmer bg-gradient-to-r from-transparent via-white/25 to-transparent" />
+                    </span>
+                  )}
+                </div>
               </div>
               {progress.running && (
                 <p className="mt-2 text-xs text-app-muted">Stockfish is reviewing your public games in the background.</p>
@@ -229,10 +206,10 @@ export function PuzzlePage({ username }: PuzzlePageProps) {
 
           {trainingStarted && !loading && !progress.running && puzzles.length === 0 && (
             <div className="mt-5 flex flex-col items-center py-8 text-center text-sm text-app-muted">
-              <div className="mb-3 grid h-12 w-12 place-items-center rounded-xl bg-app-accentSoft text-app-accent">
+              <div className="mb-3 grid h-12 w-12 place-items-center rounded-xl bg-app-panelSecondary text-app-muted">
                 <Search className="h-6 w-6" strokeWidth={2} />
               </div>
-              No puzzles match this set yet. Try a broader phase/theme or build fresh puzzles.
+              No puzzles for this phase yet. Select a different phase to try another set.
             </div>
           )}
 
@@ -252,10 +229,6 @@ export function PuzzlePage({ username }: PuzzlePageProps) {
                   <ChevronLeft className="h-4 w-4" />
                   Prev
                 </Button>
-                <Button variant="control" size="sm" disabled={index === puzzles.length - 1} onClick={() => setIndex((i) => i + 1)}>
-                  Next
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
               </div>
             </div>
           )}
@@ -266,8 +239,9 @@ export function PuzzlePage({ username }: PuzzlePageProps) {
         <PuzzleBoard
           key={puzzle.id}
           puzzle={puzzle}
-          theme={theme}
           onSolved={() => handleSolved(puzzle.id)}
+          onNext={() => setIndex((i) => i + 1)}
+          isLastPuzzle={index === puzzles.length - 1}
         />
       )}
     </div>
@@ -279,25 +253,28 @@ function OptionGroup<T extends string>({
   options,
   value,
   onChange,
+  disabled = false,
 }: {
   title: string;
   options: Array<{ value: T; label: string; help: string }>;
   value: T;
   onChange: (value: T) => void;
+  disabled?: boolean;
 }) {
   return (
     <div>
-      <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-app-muted">{title}</p>
-      <div className="grid gap-2">
+      <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-app-faint">{title}</p>
+      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
         {options.map((option) => (
           <button
             key={option.value}
             type="button"
+            disabled={disabled}
             onClick={() => onChange(option.value)}
-            className={`rounded-lg border px-3 py-2 text-left transition ${
+            className={`rounded-lg border px-3 py-2 text-left transition disabled:cursor-wait disabled:opacity-60 ${
               value === option.value
                 ? "border-app-accent bg-app-accentSoft text-app-text"
-                : "border-app-border bg-app-panelSecondary/40 text-app-muted hover:border-app-borderStrong hover:text-app-text"
+                : "border-app-border bg-app-panelSecondary text-app-muted hover:border-app-borderStrong hover:text-app-text"
             }`}
           >
             <span className="block text-sm font-medium">{option.label}</span>
@@ -313,11 +290,12 @@ type PuzzleResult = "idle" | "correct" | "wrong" | "revealed";
 
 interface PuzzleBoardProps {
   puzzle: Puzzle;
-  theme: PuzzleTheme;
   onSolved: () => void;
+  onNext: () => void;
+  isLastPuzzle: boolean;
 }
 
-function PuzzleBoard({ puzzle, theme, onSolved }: PuzzleBoardProps) {
+function PuzzleBoard({ puzzle, onSolved, onNext, isLastPuzzle }: PuzzleBoardProps) {
   const [chess] = useState(() => new Chess(puzzle.fen));
   const [position, setPosition] = useState(puzzle.fen);
   const [result, setResult] = useState<PuzzleResult>("idle");
@@ -325,31 +303,145 @@ function PuzzleBoard({ puzzle, theme, onSolved }: PuzzleBoardProps) {
   const [hintLevel, setHintLevel] = useState(0);
   const [pvIndex, setPvIndex] = useState(0);
   const [exploreFen, setExploreFen] = useState<string | null>(null);
+  const [checking, setChecking] = useState(false);
+  // Click-to-move: the currently selected origin square and the highlight
+  // styles for it plus its legal destinations.
+  const [selectedSquare, setSelectedSquare] = useState<Square | null>(null);
+  const [optionSquares, setOptionSquares] = useState<Record<string, CSSProperties>>({});
   const pvTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Player-POV centipawn eval after the engine's best move; computed lazily and
+  // cached so alternative moves can be accepted if they're nearly as strong.
+  const bestEvalRef = useRef<number | null | undefined>(undefined);
 
   const boardOrientation = puzzle.color === "White" ? "white" : "black";
-  const continuation = puzzle.pv.slice(1);
+  const interactive = !checking && (result === "idle" || result === "wrong") && pvIndex % 2 === 0;
+
+  function clearSelection() {
+    setSelectedSquare(null);
+    setOptionSquares({});
+  }
+
+  /**
+   * Highlight the legal destinations for the piece on `square`. Returns false
+   * (and selects nothing) when the piece has no legal moves.
+   */
+  function showMoveOptions(square: Square): boolean {
+    const moves = chess.moves({ square, verbose: true });
+    if (moves.length === 0) return false;
+
+    const styles: Record<string, CSSProperties> = {
+      [square]: { background: "rgba(200,161,90,0.32)" },
+    };
+    for (const move of moves) {
+      const occupied = chess.get(move.to);
+      styles[move.to] = occupied
+        ? // Capture: a ring around the target piece.
+          { background: "radial-gradient(circle, transparent 54%, rgba(200,161,90,0.55) 56%)" }
+        : // Quiet move: a centered dot.
+          { background: "radial-gradient(circle, rgba(200,161,90,0.6) 24%, transparent 26%)" };
+    }
+    setSelectedSquare(square);
+    setOptionSquares(styles);
+    return true;
+  }
+
+  function onSquareClick(square: Square) {
+    if (!interactive) return;
+
+    // A piece is already selected: try to move it to the clicked square.
+    if (selectedSquare && square !== selectedSquare) {
+      const moved = onPieceDrop(selectedSquare, square);
+      if (moved) {
+        clearSelection();
+        return;
+      }
+      // Not a legal destination — fall through to (re)select below.
+    }
+
+    // Select the clicked square if it holds a piece for the side to move.
+    const piece = chess.get(square);
+    if (piece && piece.color === chess.turn()) {
+      showMoveOptions(square);
+    } else {
+      clearSelection();
+    }
+  }
+
+  function registerWrong() {
+    const next = attempts + 1;
+    setAttempts(next);
+    setHintLevel((level) => Math.max(level, Math.min(2, next)));
+    setResult("wrong");
+    setTimeout(() => setResult("idle"), 1200);
+  }
+
+  async function bestMoveEval(): Promise<number | null> {
+    if (bestEvalRef.current !== undefined) return bestEvalRef.current;
+    try {
+      const board = new Chess(puzzle.fen);
+      board.move(puzzle.best_move);
+      if (board.isCheckmate()) {
+        bestEvalRef.current = 100000;
+      } else {
+        const res = await requestEngineMove(board.fen());
+        bestEvalRef.current = res.eval_cp === null ? null : -res.eval_cp;
+      }
+    } catch {
+      bestEvalRef.current = null;
+    }
+    return bestEvalRef.current;
+  }
+
+  /** Accept a non-exact move if it keeps the position nearly as good as best. */
+  async function isGoodAlternative(fenAfterMove: string): Promise<{ ok: boolean; replyFen: string | null }> {
+    try {
+      const best = await bestMoveEval();
+      const res = await requestEngineMove(fenAfterMove);
+      if (res.eval_cp === null) return { ok: false, replyFen: null };
+      const playerEval = -res.eval_cp; // flip from opponent POV back to the solver
+      const ok = best === null
+        ? playerEval >= 100
+        : winChance(playerEval) >= winChance(best) - 8;
+      return { ok, replyFen: ok ? res.fen : null };
+    } catch {
+      return { ok: false, replyFen: null };
+    }
+  }
 
   useEffect(() => {
-    if (result !== "correct" || pvIndex >= continuation.length) return;
+    const computerReply = pvIndex % 2 === 1 ? puzzle.pv[pvIndex] : null;
+    if (result !== "idle" || !checking || !computerReply) return;
     pvTimeout.current = setTimeout(() => {
       try {
-        const moveResult = chess.move(continuation[pvIndex]);
+        const moveResult = chess.move(computerReply);
         if (moveResult) {
           setPosition(chess.fen());
-          setPvIndex((i) => i + 1);
+          const nextIndex = pvIndex + 1;
+          setPvIndex(nextIndex);
+          if (nextIndex >= puzzle.pv.length || chess.isGameOver()) {
+            setChecking(false);
+            setResult("correct");
+            onSolved();
+          } else {
+            setChecking(false);
+          }
         }
       } catch {
         // Some SAN returned by the engine can be hard to replay after promotion/castling edge cases.
+        setChecking(false);
+        setResult("correct");
+        onSolved();
       }
     }, 700);
     return () => {
       if (pvTimeout.current) clearTimeout(pvTimeout.current);
     };
-  }, [result, pvIndex]);
+  }, [checking, chess, onSolved, puzzle.pv, pvIndex, result]);
 
   function onPieceDrop(source: string, target: string): boolean {
-    if (result !== "idle") return false;
+    if (result !== "idle" || checking) return false;
+    clearSelection();
+    const fenBeforeMove = chess.fen();
 
     let moveResult;
     try {
@@ -359,44 +451,89 @@ function PuzzleBoard({ puzzle, theme, onSolved }: PuzzleBoardProps) {
     }
 
     const played = moveResult.from + moveResult.to + (moveResult.promotion ?? "");
-    const bestUci = puzzle.best_move_uci ?? "";
-    const correct = played === bestUci || played.slice(0, 4) === bestUci.slice(0, 4);
+    let expectedUci = pvIndex === 0 ? puzzle.best_move_uci ?? "" : "";
+    try {
+      const expectedBoard = new Chess(fenBeforeMove);
+      const expectedMove = expectedBoard.move(puzzle.pv[pvIndex]);
+      expectedUci = expectedMove.from + expectedMove.to + (expectedMove.promotion ?? "");
+    } catch {}
+    const exact = played === expectedUci || played.slice(0, 4) === expectedUci.slice(0, 4);
 
-    if (correct) {
+    // Exact engine move, or any move that delivers checkmate, is always accepted.
+    if (exact || chess.isCheckmate()) {
       setPosition(chess.fen());
-      setResult("correct");
-      onSolved();
-    } else {
-      chess.undo();
-      const next = attempts + 1;
-      setAttempts(next);
-      setHintLevel(Math.max(hintLevel, Math.min(2, next)));
-      setResult("wrong");
-      setTimeout(() => setResult("idle"), 1200);
+      const nextIndex = pvIndex + 1;
+      setPvIndex(nextIndex);
+      if (nextIndex >= puzzle.pv.length || chess.isGameOver()) {
+        setResult("correct");
+        onSolved();
+      } else {
+        setResult("idle");
+        setChecking(true);
+      }
+      return true;
     }
-    return correct;
+
+    // A move that ends the game without mate (stalemate/draw) is not the idea.
+    if (chess.isGameOver()) {
+      chess.undo();
+      registerWrong();
+      return false;
+    }
+
+    // Later moves must follow the line so player and computer turns stay synchronized.
+    if (pvIndex > 0) {
+      chess.undo();
+      setPosition(chess.fen());
+      registerWrong();
+      return false;
+    }
+
+    // Otherwise ask the engine whether this first-move alternative is nearly as strong.
+    setPosition(chess.fen());
+    setChecking(true);
+    void isGoodAlternative(chess.fen()).then(({ ok, replyFen }) => {
+      setChecking(false);
+      if (ok) {
+        if (replyFen) {
+          chess.load(replyFen);
+          setPosition(replyFen);
+        }
+        setResult("correct");
+        onSolved();
+      } else {
+        chess.undo();
+        setPosition(chess.fen());
+        registerWrong();
+      }
+    });
+    return true;
   }
 
   function reveal() {
     try {
-      const moveResult = chess.move(puzzle.best_move);
+      const moveResult = chess.move(puzzle.pv[pvIndex] ?? puzzle.best_move);
       if (moveResult) setPosition(chess.fen());
     } catch {}
     setResult("revealed");
     onSolved();
   }
 
-  const hint = buildHint(puzzle, theme, hintLevel);
-  const statusText =
-    result === "correct"
+  const hint = buildHint(puzzle, hintLevel);
+  const idlePrompt = pvIndex > 0
+    ? "Your turn. Find the next move."
+    : puzzle.color === "White"
+      ? "White to move. Find the best move."
+      : "Black to move. Find the best move.";
+  const statusText = checking
+    ? "Checking your move…"
+    : result === "correct"
       ? `Correct. Best move: ${puzzle.best_move}`
       : result === "revealed"
         ? `Solution: ${puzzle.best_move}`
         : result === "wrong"
           ? "Not quite. Look for the forcing move."
-          : puzzle.color === "White"
-            ? "White to move. Find the best move."
-            : "Black to move. Find the best move.";
+          : idlePrompt;
 
   const statusColor =
     result === "correct" || result === "revealed"
@@ -417,8 +554,8 @@ function PuzzleBoard({ puzzle, theme, onSolved }: PuzzleBoardProps) {
   }
 
   return (
-    <Card className="overflow-hidden">
-      <div className="px-5 py-4">
+    <Card>
+      <div>
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <Badge tone={puzzle.classification === "Blunder" ? "red" : "orange"}>
@@ -452,8 +589,10 @@ function PuzzleBoard({ puzzle, theme, onSolved }: PuzzleBoardProps) {
             position={position}
             boardOrientation={boardOrientation}
             animationDuration={180}
-            arePiecesDraggable={result === "idle" || result === "wrong"}
+            arePiecesDraggable={interactive}
             onPieceDrop={onPieceDrop}
+            onSquareClick={onSquareClick}
+            customSquareStyles={optionSquares}
             customDarkSquareStyle={{ backgroundColor: "#b58863" }}
             customLightSquareStyle={{ backgroundColor: "#f0d9b5" }}
             customBoardStyle={{ overflow: "hidden" }}
@@ -461,7 +600,7 @@ function PuzzleBoard({ puzzle, theme, onSolved }: PuzzleBoardProps) {
         </div>
 
         {hint && result === "idle" && (
-          <div className="mt-4 rounded-lg border border-app-border bg-app-panelSecondary/50 px-4 py-3 text-sm text-app-muted">
+          <div className="mt-4 border-l-2 border-app-accent pl-3 text-sm text-app-muted">
             <span className="font-medium text-app-text">Hint:</span> {hint}
           </div>
         )}
@@ -483,11 +622,12 @@ function PuzzleBoard({ puzzle, theme, onSolved }: PuzzleBoardProps) {
             <Swords className="h-4 w-4" />
             Play it out
           </Button>
-          {(result === "correct" || result === "revealed") && continuation.length > 0 && pvIndex < continuation.length && (
-            <p className="text-xs text-app-muted">Engine line: {continuation.join(" ")}</p>
-          )}
-          {(result === "correct" || result === "revealed") && pvIndex >= continuation.length && continuation.length > 0 && (
-            <p className="text-xs text-app-muted">Full line: {puzzle.pv.join(" ")}</p>
+          <Button variant="control" size="sm" disabled={isLastPuzzle} onClick={onNext}>
+            Next
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+          {checking && pvIndex % 2 === 1 && (
+            <p className="text-xs text-app-muted">Computer thinking…</p>
           )}
         </div>
 
@@ -501,12 +641,9 @@ function PuzzleBoard({ puzzle, theme, onSolved }: PuzzleBoardProps) {
   );
 }
 
-function buildHint(puzzle: Puzzle, theme: PuzzleTheme, level: number) {
+function buildHint(puzzle: Puzzle, level: number) {
   if (level <= 0) return "";
   if (level === 1) {
-    if (theme === "mate") return "Start by checking the king or creating an immediate mate threat.";
-    if (theme === "fork") return "Look for a move that attacks two important targets at once.";
-    if (theme === "pin") return "Look for a line piece aiming through a defender toward a more valuable piece.";
     return `The missed chance was a ${puzzle.classification.toLowerCase()} from move ${puzzle.move_number}.`;
   }
   const piece = puzzle.best_move.match(/^[KQRBN]/)?.[0] ?? "pawn";

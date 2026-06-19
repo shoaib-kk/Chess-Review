@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { Chessboard } from "react-chessboard";
 import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, FlipVertical2, Swords } from "lucide-react";
-import type { GameSummary, MoveAnalysis, MoveClassification } from "../types";
+import type { GameSummary, MoveAnalysis } from "../types";
+import { classificationMeta } from "../utils/classification";
+import { isMateScore, mateInMoves } from "../utils/evalFormat";
 import { ExploreBoard } from "./ExploreBoard";
 import { ClassificationBadge } from "./ui/Badge";
 import { Button } from "./ui/Button";
@@ -21,19 +23,13 @@ function uciSquares(uci: string | null): [string, string] | null {
   return [uci.slice(0, 2), uci.slice(2, 4)];
 }
 
-const annotationSymbols: Record<MoveClassification, string> = {
-  Excellent: "",
-  Inaccuracy: "?!",
-  Mistake: "?",
-  Blunder: "??",
-};
-
-const annotationStyles: Record<MoveClassification, { backgroundColor: string; color: string }> = {
-  Excellent: { backgroundColor: "transparent", color: "inherit" },
-  Inaccuracy: { backgroundColor: "#fbbf24", color: "#1e1e1e" },
-  Mistake: { backgroundColor: "#fb923c", color: "#1e1e1e" },
-  Blunder: { backgroundColor: "#f43f5e", color: "#ffffff" },
-};
+function hexToRgba(hex: string, alpha: number): string {
+  const value = hex.replace("#", "");
+  const r = parseInt(value.slice(0, 2), 16);
+  const g = parseInt(value.slice(2, 4), 16);
+  const b = parseInt(value.slice(4, 6), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
 
 function squareOverlayPosition(square: string, flipped: boolean) {
   const file = square.charCodeAt(0) - 97;
@@ -48,7 +44,7 @@ function squareOverlayPosition(square: string, flipped: boolean) {
 }
 
 function mistakeSquare(move: MoveAnalysis | undefined): string | null {
-  if (!move || move.classification === "Excellent") return null;
+  if (!move || !classificationMeta(move.classification).isError) return null;
   return uciSquares(move.played_move_uci)?.[1] ?? null;
 }
 
@@ -64,20 +60,23 @@ function evalWhitePov(move: MoveAnalysis | undefined): number | null {
 
 function evalBarPercent(evalCp: number | null) {
   if (evalCp === null) return 50;
-  if (Math.abs(evalCp) >= 100000) return evalCp > 0 ? 100 : 0;
+  if (isMateScore(evalCp)) return evalCp > 0 ? 100 : 0;
   const pawns = evalCp / 100;
   return Math.max(0, Math.min(100, 50 + pawns * 8));
 }
 
 function evalLabel(evalCp: number | null) {
   if (evalCp === null) return "0.00";
-  if (Math.abs(evalCp) >= 100000) return evalCp > 0 ? "Mate" : "-Mate";
+  if (isMateScore(evalCp)) return `${evalCp > 0 ? "" : "-"}M${mateInMoves(evalCp)}`;
   const pawns = evalCp / 100;
   return `${pawns > 0 ? "+" : ""}${pawns.toFixed(2)}`;
 }
 
 function evalDescription(evalCp: number | null) {
   if (evalCp === null || Math.abs(evalCp) < 30) return "Equal";
+  if (isMateScore(evalCp)) {
+    return evalCp > 0 ? `White has mate in ${mateInMoves(evalCp)}` : `Black has mate in ${mateInMoves(evalCp)}`;
+  }
   if (evalCp > 0) return evalCp > 300 ? "White is winning" : "White is better";
   return evalCp < -300 ? "Black is winning" : "Black is better";
 }
@@ -117,7 +116,8 @@ export function ChessboardPanel({
   const played = uciSquares(move?.played_move_uci ?? null);
   const best = uciSquares(move?.best_move_uci ?? null);
   const highlightedSquare = mistakeSquare(move);
-  const annotationSquare = move && annotationSymbols[move.classification] ? played?.[1] : null;
+  const meta = move ? classificationMeta(move.classification) : null;
+  const annotationSquare = meta && meta.boardSymbol ? played?.[1] : null;
 
   const navigationIndexes =
     reviewMyMovesOnly && summary.user_color
@@ -132,28 +132,24 @@ export function ChessboardPanel({
   const nextIndex = navigationIndexes.find((index) => index > moveIndex) ?? lastIndex;
 
   const arrows = [
-    played ? [played[0], played[1], "#6366f1"] : null,
-    best && move?.best_move_uci !== move?.played_move_uci ? [best[0], best[1], "#34d399"] : null,
+    played ? [played[0], played[1], "#c8a15a"] : null,
+    best && move?.best_move_uci !== move?.played_move_uci ? [best[0], best[1], "#5cb585"] : null,
   ].filter(Boolean);
 
-  const customSquareStyles = highlightedSquare
-    ? {
-        [highlightedSquare]: {
-          background:
-            move?.classification === "Blunder"
-              ? "radial-gradient(circle, rgba(244,63,94,0.68) 0%, rgba(244,63,94,0.22) 72%)"
-              : move?.classification === "Mistake"
-                ? "radial-gradient(circle, rgba(251,146,60,0.68) 0%, rgba(251,146,60,0.22) 72%)"
-                : "radial-gradient(circle, rgba(251,191,36,0.68) 0%, rgba(251,191,36,0.2) 72%)",
-        },
-      }
-    : {};
+  const customSquareStyles =
+    highlightedSquare && meta
+      ? {
+          [highlightedSquare]: {
+            background: `radial-gradient(circle, ${hexToRgba(meta.color, 0.68)} 0%, ${hexToRgba(meta.color, 0.22)} 72%)`,
+          },
+        }
+      : {};
 
   return (
-    <Card className="overflow-hidden">
-      <div className="flex flex-col gap-4 border-b border-app-border px-5 py-5 sm:flex-row sm:items-center sm:justify-between">
+    <Card>
+      <div className="flex flex-col gap-4 pb-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-app-accent/80">Position</p>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-app-faint">Position</p>
           <div className="mt-1 flex flex-wrap items-center gap-3">
             <span className="font-mono text-2xl font-semibold text-app-text">{moveLabel(move)}</span>
             {move && <ClassificationBadge classification={move.classification} />}
@@ -171,27 +167,28 @@ export function ChessboardPanel({
         </div>
       </div>
 
-      <div className="px-4 pb-5 pt-5 sm:px-5">
+      <div>
         <div className="mx-auto grid max-w-[730px] grid-cols-[28px_minmax(0,680px)] gap-3">
           <div
-            className="relative overflow-hidden rounded-lg border border-app-border bg-[#111111]"
+            className="relative overflow-hidden rounded-lg border border-app-border bg-[#0a0a0c] ring-1 ring-inset ring-white/5"
             aria-label={`Evaluation: ${evalDescription(currentEval)}`}
             title={`${evalDescription(currentEval)} (${evalLabel(currentEval)})`}
           >
-            <div className="absolute inset-x-0 bottom-0 bg-[#e6e6e6] transition-all duration-200" style={{ height: `${whitePercent}%` }} />
-            <div className="absolute inset-x-0 top-0 bg-[#15161b] transition-all duration-200" style={{ height: `${100 - whitePercent}%` }} />
+            <div className="absolute inset-x-0 bottom-0 bg-[#ededed] transition-all duration-300 ease-out" style={{ height: `${whitePercent}%` }} />
+            <div className="absolute inset-x-0 top-0 bg-[#0a0a0c] transition-all duration-300 ease-out" style={{ height: `${100 - whitePercent}%` }} />
+            <div className="absolute left-1/2 top-1/2 h-px w-full -translate-x-1/2 -translate-y-1/2 bg-app-accent/40" />
             {leader === "black" && (
-              <div className="absolute inset-x-0 top-1 text-center font-mono text-[10px] font-semibold text-[#e6e6e6]">
+              <div className="absolute inset-x-0 top-1 text-center font-mono text-[10px] font-semibold text-[#ededed]">
                 {evalLabel(currentEval)}
               </div>
             )}
             {leader === "white" && (
-              <div className="absolute inset-x-0 bottom-1 text-center font-mono text-[10px] font-semibold text-[#15161b]">
+              <div className="absolute inset-x-0 bottom-1 text-center font-mono text-[10px] font-semibold text-[#0a0a0c]">
                 {evalLabel(currentEval)}
               </div>
             )}
             {leader === "equal" && (
-              <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 text-center font-mono text-[10px] font-semibold text-[#e6e6e6] mix-blend-difference">
+              <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 text-center font-mono text-[10px] font-semibold text-[#ededed] mix-blend-difference">
                 {evalLabel(currentEval)}
               </div>
             )}
@@ -211,16 +208,16 @@ export function ChessboardPanel({
               customArrows={arrows as never}
               customSquareStyles={customSquareStyles}
             />
-            {move && annotationSquare && (
+            {move && meta && annotationSquare && (
               <div
                 className="pointer-events-none absolute z-10 grid h-5 w-5 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full font-mono text-[9px] font-medium leading-none opacity-100"
                 style={{
                   ...squareOverlayPosition(annotationSquare, flipped),
-                  ...annotationStyles[move.classification],
+                  ...meta.annotation,
                 }}
                 aria-label={move.classification}
               >
-                {annotationSymbols[move.classification]}
+                {meta.boardSymbol}
               </div>
             )}
           </div>

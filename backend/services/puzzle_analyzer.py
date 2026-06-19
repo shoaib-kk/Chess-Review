@@ -24,6 +24,12 @@ _progress: dict[str, dict] = {}
 
 GAME_LIMIT = 200
 
+# Depth used when mining puzzles from past games. Decoupled from the interactive
+# review default so puzzle quality doesn't silently track the UI's "normal"
+# setting. Higher = fewer bogus puzzles from shallow misreads, but slower over
+# the (up to 200) games analysed in the background.
+PUZZLE_ANALYSIS_DEPTH = 14
+
 
 def get_progress(username: str) -> dict:
     with _lock:
@@ -115,7 +121,7 @@ def _analyze_one(username: str, raw: dict[str, Any]) -> None:
         return
 
     try:
-        summary = analyze_pgn(pgn_text=pgn_text, depth=12, mode="normal")
+        summary = analyze_pgn(pgn_text=pgn_text, depth=PUZZLE_ANALYSIS_DEPTH, mode="normal")
     except Exception:
         logger.warning("Could not analyze game %s", url)
         mark_game_analyzed(username, url, 0)
@@ -129,6 +135,10 @@ def _analyze_one(username: str, raw: dict[str, Any]) -> None:
         if cls not in ("Blunder", "Mistake"):
             continue
         if not move.best_move:
+            continue
+        # Evaluations are from the mover's POV. Only create puzzles where the
+        # player is equal or better before their mistake.
+        if move.eval_before is None or move.eval_before < 0:
             continue
 
         best_move_uci = _to_uci(move.fen_before, move.best_move)
@@ -145,6 +155,7 @@ def _analyze_one(username: str, raw: dict[str, Any]) -> None:
             best_move_uci=best_move_uci,
             pv=move.pv,
             cp_loss=move.cp_loss or 0.0,
+            eval_before=move.eval_before,
             classification=cls,
         )
         count += 1
