@@ -9,12 +9,11 @@ import {
   PanelLeftOpen,
   Puzzle,
   RotateCcw,
-  Swords,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { ChessGlyph } from "./ui/ChessGlyph";
 
-type Mode = "home" | "chesscom" | "pgn" | "insights" | "repertoire" | "puzzles" | "twin";
+type Mode = "home" | "chesscom" | "pgn" | "insights" | "repertoire" | "puzzles";
 
 interface HeaderProps {
   activeMode: Mode;
@@ -50,12 +49,6 @@ const navSections: { heading: string; items: NavItem[] }[] = [
       { mode: "puzzles", label: "Puzzles", icon: Puzzle, title: "Tactics built from your own games" },
     ],
   },
-  {
-    heading: "Digital Twin",
-    items: [
-      { mode: "twin", label: "Player Twin", icon: Swords, title: "Model your style and play against your digital twin" },
-    ],
-  },
 ];
 
 export function Header({
@@ -81,7 +74,7 @@ export function Header({
           </span>
           {!collapsed && (
             <div className="min-w-0">
-              <h1 className="text-sm font-semibold tracking-tight text-app-text">Chess Review</h1>
+              <h1 className="text-sm font-semibold tracking-tight text-app-text">Chessspy</h1>
               <p className="truncate text-[11px] text-app-subtle">Analysis workspace</p>
             </div>
           )}

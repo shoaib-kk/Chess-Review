@@ -1,4 +1,4 @@
-# Chess Review
+# Chessspy
 
 A Chess.com-style game review app with a FastAPI backend, React frontend, and Stockfish analysis.
 

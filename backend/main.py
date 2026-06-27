@@ -32,7 +32,7 @@ except ModuleNotFoundError:
     from game_analyzer import analyze_pgn
 
 
-app = FastAPI(title="Chess Game Reviewer API", version="1.0.0")
+app = FastAPI(title="Chessspy API", version="1.0.0")
 app.include_router(puzzles_router)
 app.include_router(play_router)
 
