@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import sys
 from copy import deepcopy
 from functools import lru_cache
@@ -8,6 +9,8 @@ from pathlib import Path
 from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 
+from .db import SessionLocal, wait_for_db
+from .repositories.games import save_reviewed_game
 from .schemas import AnalyzeRequest, ChessComAnalyzeRequest, ChessComGameResponse, GameSummaryResponse, HealthResponse
 from .serializers import serialize_game_summary
 from .services.chesscom_client import ChessComClientError, get_recent_games
@@ -16,6 +19,8 @@ from .services.player_insights import get_player_insights
 from .services.rate_limit import analyze_rate_limiter, lookup_rate_limiter
 from .routers.puzzles import router as puzzles_router
 from .routers.play import router as play_router
+
+logger = logging.getLogger(__name__)
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
@@ -31,6 +36,13 @@ app = FastAPI(title="Chess Game Reviewer API", version="1.0.0")
 app.include_router(puzzles_router)
 app.include_router(play_router)
 
+
+@app.on_event("startup")
+def _startup() -> None:
+    # Block until Postgres is reachable so requests aren't served against a DB
+    # that hasn't finished starting. Migrations are applied by the entrypoint.
+    wait_for_db()
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -41,10 +53,14 @@ app.add_middleware(
         "http://127.0.0.1:5174",
         "http://localhost:5177",
         "http://127.0.0.1:5177",
+        # DigitalOcean droplet (frontend is served same-origin via nginx, so CORS
+        # isn't normally exercised; listed for direct API access / safety).
+        "http://170.64.177.231:8080",
     ],
     # Covers Vercel preview deployments (e.g. chess-review-git-<branch>-<user>.vercel.app).
     allow_origin_regex=r"https://chess-review.*\.vercel\.app",
-    allow_credentials=True,
+    # No cookies/auth are used, so credentialed requests aren't needed.
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -127,4 +143,20 @@ def _run_cached_analysis(pgn: str, depth: int, mode: str, username: str) -> dict
 @lru_cache(maxsize=32)
 def _cached_analysis_result(pgn: str, depth: int, mode: str, username: str) -> dict:
     summary = analyze_pgn(pgn_text=pgn, depth=depth, mode=mode)
-    return serialize_game_summary(summary, username=username or None)
+    serialized = serialize_game_summary(summary, username=username or None)
+    # Persist every reviewed game (idempotent dedup by PGN hash). Runs once per
+    # unique input thanks to the lru_cache; never let a DB hiccup break review.
+    try:
+        with SessionLocal() as session:
+            save_reviewed_game(
+                session,
+                username=username or None,
+                pgn=pgn,
+                summary=summary,
+                analysis_json=serialized,
+                depth=depth,
+                mode=mode,
+            )
+    except Exception:  # pragma: no cover - persistence is best-effort
+        logger.warning("Failed to persist reviewed game", exc_info=True)
+    return serialized

@@ -17,7 +17,6 @@ import {
   Trophy,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { Area, AreaChart, ResponsiveContainer, Tooltip, YAxis } from "recharts";
 import { fetchChessComGames, fetchPlayerInsights, fetchPuzzles } from "../api/client";
 import type { ChessComGame, GameSummary, OpeningInsight, PlayerInsights, PuzzleList } from "../types";
 import { SAMPLE_GAME_LABEL } from "../data/sampleGame";
@@ -271,11 +270,6 @@ function DashboardBody({
         />
       </div>
 
-      {/* Trend */}
-      <div className="grid gap-4 lg:grid-cols-12">
-        <TrendPanel className="lg:col-span-12" insights={insights} />
-      </div>
-
       {/* Discovery cards */}
       <div>
         <SectionHeading eyebrow="Your repertoire" title="Openings & training" />
@@ -414,79 +408,6 @@ function AccuracyCard({
         <span className="text-xs text-app-muted">vs 90-day avg</span>
       </div>
       {series.length > 1 && <Sparkline data={series} width={200} height={32} />}
-    </Surface>
-  );
-}
-
-// ── trend chart ───────────────────────────────────────────────────────────
-function TrendPanel({ className = "", insights }: { className?: string; insights: PlayerInsights | null }) {
-  const [metric, setMetric] = useState<"accuracy" | "rating">("accuracy");
-  const points = insights?.performance.trend_points ?? [];
-  const ratingPts = insights?.performance.rating_points ?? [];
-
-  const chartData =
-    metric === "accuracy"
-      ? points.map((p, i) => ({ i, value: p.accuracy }))
-      : (ratingPts.length ? ratingPts : points).map((p: { rating: number | null }, i) => ({ i, value: p.rating }));
-
-  const hasData = chartData.filter((d) => d.value != null).length > 1;
-
-  return (
-    <Surface className={`flex flex-col p-5 ${className}`}>
-      <div className="mb-4 flex items-center justify-between gap-3">
-        <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-app-subtle">Performance trend</p>
-          <p className="mt-0.5 text-sm text-app-muted">{metric === "accuracy" ? "Accuracy per game" : "Rating over time"}</p>
-        </div>
-        <Segmented
-          value={metric}
-          onChange={(v) => setMetric(v as "accuracy" | "rating")}
-          options={[
-            { value: "accuracy", label: "Accuracy" },
-            { value: "rating", label: "Rating" },
-          ]}
-        />
-      </div>
-      {hasData ? (
-        <div className="h-[200px] w-full">
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={chartData} margin={{ top: 6, right: 4, bottom: 0, left: 0 }}>
-              <defs>
-                <linearGradient id="trendFill" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#c8a15a" stopOpacity={0.28} />
-                  <stop offset="100%" stopColor="#c8a15a" stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <YAxis hide domain={["dataMin - 2", "dataMax + 2"]} />
-              <Tooltip
-                cursor={{ stroke: "rgba(255,255,255,0.12)", strokeWidth: 1 }}
-                contentStyle={{
-                  background: "#191a1e",
-                  border: "1px solid #34363d",
-                  borderRadius: 10,
-                  fontSize: 12,
-                  color: "#f3f3f5",
-                  boxShadow: "0 16px 48px -16px rgba(0,0,0,0.7)",
-                }}
-                labelFormatter={() => ""}
-                formatter={(value: number) => [metric === "accuracy" ? `${value?.toFixed?.(1)}%` : value, metric === "accuracy" ? "Accuracy" : "Rating"]}
-              />
-              <Area
-                type="monotone"
-                dataKey="value"
-                stroke="#c8a15a"
-                strokeWidth={2}
-                fill="url(#trendFill)"
-                dot={false}
-                activeDot={{ r: 4, fill: "#c8a15a", stroke: "#0a0a0c", strokeWidth: 2 }}
-                connectNulls
-              />
-            </AreaChart>
-          </ResponsiveContainer>
-        </div>
-      ) : (
-        <EmptyHint icon={TrendingUp} text="Not enough games yet to chart a trend." />
-      )}
     </Surface>
   );
 }
@@ -721,32 +642,6 @@ function Stat({ label, value, tone }: { label: string; value: string; tone?: "bl
       <div className={`mt-0.5 nums text-xl font-semibold ${tone === "blunder" ? "text-app-blunder" : "text-app-text"}`}>
         {value}
       </div>
-    </div>
-  );
-}
-
-function Segmented({
-  value,
-  onChange,
-  options,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-  options: { value: string; label: string }[];
-}) {
-  return (
-    <div className="inline-flex rounded-lg border border-app-border bg-app-bgInset p-0.5">
-      {options.map((opt) => (
-        <button
-          key={opt.value}
-          onClick={() => onChange(opt.value)}
-          className={`rounded-md px-3 py-1 text-xs font-medium transition ${
-            value === opt.value ? "bg-app-raised text-app-text shadow-sheen" : "text-app-subtle hover:text-app-text"
-          }`}
-        >
-          {opt.label}
-        </button>
-      ))}
     </div>
   );
 }

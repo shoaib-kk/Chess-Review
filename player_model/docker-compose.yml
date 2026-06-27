@@ -1,0 +1,70 @@
+# Player Modelling Engine: FastAPI + Redis + Celery worker + Celery beat.
+# Run from the repo root:  docker compose -f player_model/docker-compose.yml up --build
+#
+# Copy player_model/.env.example to player_model/.env and adjust before running.
+
+x-engine-env: &engine-env
+  PM_REDIS_URL: redis://redis:6379/0
+  PM_DATABASE_URL: sqlite:////data/player_model.db
+  PM_INDEX_DIR: /data/indices
+  PM_MODELS_DIR: /data/models
+  STOCKFISH_PATH: /usr/games/stockfish
+  STOCKFISH_DEPTH: "18"
+  # Auth + CORS. MASTER_API_KEY must match the frontend's VITE_PM_API_KEY.
+  MASTER_API_KEY: ${MASTER_API_KEY:-dev-master-key}
+  FRONTEND_URL: ${FRONTEND_URL:-http://localhost:5173}
+  # Chess.com asks clients to identify themselves; set a real contact in prod.
+  PM_CHESSCOM_USER_AGENT: ${PM_CHESSCOM_USER_AGENT:-PlayerModellingEngine/1.0 (contact: admin@example.com)}
+  PM_SYNC_INTERVAL_HOURS: ${PM_SYNC_INTERVAL_HOURS:-6}
+
+services:
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  api:
+    build:
+      context: ..
+      dockerfile: player_model/Dockerfile
+    command: uvicorn player_model.api:app --host 0.0.0.0 --port 8000
+    ports:
+      - "8000:8000"
+    environment: *engine-env
+    volumes:
+      - pmdata:/data
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  worker:
+    build:
+      context: ..
+      dockerfile: player_model/Dockerfile
+    # One Stockfish per worker process: concurrency 1 keeps it to a single engine.
+    command: celery -A player_model.celery_app:celery_app worker --loglevel=info --concurrency=1
+    environment: *engine-env
+    volumes:
+      - pmdata:/data
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  beat:
+    build:
+      context: ..
+      dockerfile: player_model/Dockerfile
+    # Scheduler only: enqueues the incremental Chess.com resync every 6 hours.
+    command: celery -A player_model.celery_app:celery_app beat --loglevel=info
+    environment: *engine-env
+    volumes:
+      - pmdata:/data
+    depends_on:
+      redis:
+        condition: service_healthy
+
+volumes:
+  pmdata:

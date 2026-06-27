@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <defs>
+    <linearGradient id="sheen" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#c8a15a" stop-opacity="0.16" />
+      <stop offset="0.55" stop-color="#c8a15a" stop-opacity="0.04" />
+      <stop offset="1" stop-color="#c8a15a" stop-opacity="0" />
+    </linearGradient>
+  </defs>
+  <rect x="1" y="1" width="30" height="30" rx="8" fill="#0a0a0c" />
+  <rect x="1" y="1" width="30" height="30" rx="8" fill="url(#sheen)" />
+  <rect x="1.5" y="1.5" width="29" height="29" rx="7.5" fill="none" stroke="#c8a15a" stroke-opacity="0.3" />
+  <text x="16" y="17" font-size="20" text-anchor="middle" dominant-baseline="central" fill="#c8a15a" font-family="'Segoe UI Symbol','Noto Sans Symbols','DejaVu Sans',sans-serif">♞</text>
+</svg>

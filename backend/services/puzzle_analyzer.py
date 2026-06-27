@@ -6,15 +6,14 @@ from typing import Any
 
 import chess
 
-from .chesscom_client import get_recent_games
-from .puzzle_store import (
-    ensure_tables,
+from ..repositories.puzzles import (
     get_analyzed_count,
     get_analyzed_urls,
     get_puzzle_count,
-    mark_game_analyzed,
-    save_puzzle,
+    save_mined_puzzles,
 )
+from ..serializers import serialize_game_summary
+from .chesscom_client import get_recent_games
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +45,6 @@ def get_progress(username: str) -> dict:
 
 def start_if_needed(username: str) -> bool:
     """Start background analysis if there are un-analyzed games and nothing is running."""
-    ensure_tables()
     with _lock:
         if username in _running:
             return False
@@ -62,7 +60,6 @@ def start_if_needed(username: str) -> bool:
 
 def start_fresh(username: str) -> bool:
     """Force a (re-)analysis run regardless of how many games are already in DB."""
-    ensure_tables()
     with _lock:
         if username in _running:
             return False
@@ -117,17 +114,17 @@ def _analyze_one(username: str, raw: dict[str, Any]) -> None:
     user_color = _user_color(raw, username)
 
     if not pgn_text or not user_color:
-        mark_game_analyzed(username, url, 0)
+        _persist(username, url, date, pgn_text, summary=None, puzzles=[])
         return
 
     try:
         summary = analyze_pgn(pgn_text=pgn_text, depth=PUZZLE_ANALYSIS_DEPTH, mode="normal")
     except Exception:
         logger.warning("Could not analyze game %s", url)
-        mark_game_analyzed(username, url, 0)
+        _persist(username, url, date, pgn_text, summary=None, puzzles=[])
         return
 
-    count = 0
+    puzzles: list[dict[str, Any]] = []
     for move in summary.move_analyses:
         if move.color != user_color:
             continue
@@ -141,29 +138,55 @@ def _analyze_one(username: str, raw: dict[str, Any]) -> None:
         if move.eval_before is None or move.eval_before < 0:
             continue
 
-        best_move_uci = _to_uci(move.fen_before, move.best_move)
-
-        save_puzzle(
-            username=username,
-            game_url=url,
-            game_date=date,
-            move_number=move.move_number,
-            color=move.color,
-            fen=move.fen_before,
-            played_move=move.move_played,
-            best_move=move.best_move,
-            best_move_uci=best_move_uci,
-            pv=move.pv,
-            cp_loss=move.cp_loss or 0.0,
-            eval_before=move.eval_before,
-            classification=cls,
+        puzzles.append(
+            {
+                "move_number": move.move_number,
+                "color": move.color,
+                "fen": move.fen_before,
+                "played_move": move.move_played,
+                "best_move": move.best_move,
+                "best_move_uci": _to_uci(move.fen_before, move.best_move),
+                "pv": move.pv,
+                "cp_loss": move.cp_loss or 0.0,
+                "eval_before": move.eval_before,
+                "eval_after": move.eval_after,
+                "classification": cls,
+            }
         )
-        count += 1
+
+    _persist(username, url, date, pgn_text, summary=summary, puzzles=puzzles)
+    if puzzles:
         with _lock:
             prog = _progress.setdefault(username, {})
-            prog["puzzle_count"] = prog.get("puzzle_count", 0) + 1
+            prog["puzzle_count"] = prog.get("puzzle_count", 0) + len(puzzles)
 
-    mark_game_analyzed(username, url, count)
+
+def _persist(
+    username: str,
+    url: str,
+    date: str,
+    pgn_text: str,
+    *,
+    summary: Any,
+    puzzles: list[dict[str, Any]],
+) -> None:
+    """Store the mined game + its puzzles, marking the game analysed.
+
+    A game with no usable PGN/colour, or that failed analysis, is still recorded
+    (with an empty PGN guarded) so it is not re-mined on the next run.
+    """
+    analysis_json = serialize_game_summary(summary, username=username) if summary is not None else None
+    save_mined_puzzles(
+        username=username,
+        game_url=url,
+        game_date=date,
+        pgn=pgn_text or url or f"{username}:{date}",
+        summary=summary,
+        analysis_json=analysis_json,
+        puzzles=puzzles,
+        depth=PUZZLE_ANALYSIS_DEPTH,
+        mode="normal",
+    )
 
 
 def _user_color(raw: dict[str, Any], username: str) -> str | None:

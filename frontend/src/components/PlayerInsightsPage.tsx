@@ -6,11 +6,9 @@ import {
   ResponsiveContainer,
   Tooltip,
 } from "recharts";
-import { Area, AreaChart, ResponsiveContainer as RC, Tooltip as TT, YAxis } from "recharts";
 import { BarChart3, BookOpen, Crosshair, Filter, Lightbulb, Search, Target, ThumbsUp, TrendingUp, Trophy } from "lucide-react";
 import { Button } from "./ui/Button";
 import { Card, CardHeader } from "./ui/Card";
-import { Delta } from "./ui/Delta";
 import { Sparkline } from "./ui/Sparkline";
 import { StatCard } from "./ui/StatCard";
 import { openingFamily } from "../utils/openingFamilies";
@@ -164,7 +162,6 @@ function InsightsReport({ insights }: { insights: PlayerInsights }) {
   const ratingSeries = perf.rating_points.map((p) => p.rating);
   const currentRating = ratingSeries.length ? ratingSeries[ratingSeries.length - 1] : null;
   const ratingDelta = ratingSeries.length > 1 ? currentRating! - ratingSeries[0] : null;
-  const accuracySeries = perf.trend_points.map((p) => p.accuracy).filter((n) => Number.isFinite(n));
 
   return (
     <div className="grid gap-5">
@@ -198,34 +195,6 @@ function InsightsReport({ insights }: { insights: PlayerInsights }) {
         />
         <StatCard label="Avg. cp loss" value={fmt(s.average_cp_loss)} icon={Crosshair} caption="lower is better" />
       </div>
-
-      {/* Performance trend */}
-      {accuracySeries.length > 1 && (
-        <Card>
-          <div className="flex items-end justify-between pb-3">
-            <CardHeader title="Accuracy trend" eyebrow="Recent form" />
-            <div className="flex items-center gap-2 pb-4 text-xs text-app-muted">
-              <Delta value={accuracyDelta} suffix="%" />
-              <span>last 30 vs 90 days</span>
-            </div>
-          </div>
-          <div className="h-44 w-full">
-            <RC width="100%" height="100%">
-              <AreaChart data={accuracySeries.map((value, i) => ({ i, value }))} margin={{ top: 6, right: 4, bottom: 0, left: 0 }}>
-                <defs>
-                  <linearGradient id="insightTrend" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#c8a15a" stopOpacity={0.26} />
-                    <stop offset="100%" stopColor="#c8a15a" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <YAxis hide domain={["dataMin - 3", "dataMax + 3"]} />
-                <TT contentStyle={TOOLTIP_STYLE} labelFormatter={() => ""} formatter={(v: number) => [`${v.toFixed(1)}%`, "Accuracy"]} />
-                <Area type="monotone" dataKey="value" stroke="#c8a15a" strokeWidth={2} fill="url(#insightTrend)" dot={false} />
-              </AreaChart>
-            </RC>
-          </div>
-        </Card>
-      )}
 
       <div className="grid gap-5 lg:grid-cols-2">
         <Card>

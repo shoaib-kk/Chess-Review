@@ -1,17 +1,16 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 
-from ..services.puzzle_analyzer import get_progress, start_fresh
-from ..services.puzzle_store import (
-    ensure_tables,
+from ..repositories.puzzles import (
     get_analyzed_count,
     get_phase_counts,
     get_puzzle_count,
     get_puzzles,
     mark_solved,
 )
-from ..services.rate_limit import lookup_rate_limiter
+from ..services.puzzle_analyzer import get_progress, start_fresh
+from ..services.rate_limit import lookup_rate_limiter, puzzle_analyze_rate_limiter
 
 router = APIRouter(prefix="/puzzles", tags=["puzzles"])
 
@@ -25,7 +24,6 @@ def list_puzzles(
     difficulty: str | None = None,
     _: None = Depends(lookup_rate_limiter),
 ) -> dict:
-    ensure_tables()
     normalized = username.strip()
 
     puzzles = get_puzzles(
@@ -45,22 +43,19 @@ def list_puzzles(
 @router.post("/{username}/analyze")
 def trigger_analysis(
     username: str,
-    _: None = Depends(lookup_rate_limiter),
+    _: None = Depends(puzzle_analyze_rate_limiter),
 ) -> dict:
     normalized = username.strip()
-    ensure_tables()
     started = start_fresh(normalized)
     return {"started": started, "message": "Analysis already running." if not started else "Analysis started."}
 
 
 @router.get("/{username}/progress")
 def puzzle_progress(username: str) -> dict:
-    ensure_tables()
     return get_progress(username.strip())
 
 
 @router.post("/{username}/{puzzle_id}/solved")
 def solved(username: str, puzzle_id: int) -> dict:
-    ensure_tables()
     mark_solved(username.strip(), puzzle_id)
     return {"ok": True}

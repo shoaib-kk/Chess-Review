@@ -9,11 +9,12 @@ import {
   PanelLeftOpen,
   Puzzle,
   RotateCcw,
+  Swords,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { ChessGlyph } from "./ui/ChessGlyph";
 
-type Mode = "home" | "chesscom" | "pgn" | "insights" | "repertoire" | "puzzles";
+type Mode = "home" | "chesscom" | "pgn" | "insights" | "repertoire" | "puzzles" | "twin";
 
 interface HeaderProps {
   activeMode: Mode;
@@ -47,6 +48,12 @@ const navSections: { heading: string; items: NavItem[] }[] = [
       { mode: "insights", label: "Insights", icon: BarChart3, title: "Win rate, accuracy, and trends over time" },
       { mode: "repertoire", label: "Repertoire", icon: BookOpen, title: "Your openings and where to improve" },
       { mode: "puzzles", label: "Puzzles", icon: Puzzle, title: "Tactics built from your own games" },
+    ],
+  },
+  {
+    heading: "Digital Twin",
+    items: [
+      { mode: "twin", label: "Player Twin", icon: Swords, title: "Model your style and play against your digital twin" },
     ],
   },
 ];

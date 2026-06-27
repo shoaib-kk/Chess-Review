@@ -3,3 +3,6 @@ fastapi
 uvicorn[standard]
 pydantic
 requests
+sqlalchemy>=2.0
+psycopg[binary]>=3.2
+alembic>=1.13

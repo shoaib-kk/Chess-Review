@@ -21,6 +21,12 @@ ANALYSIS_MODES = {
     "deep": {"max_depth": 24, "pv_limit": 8},
 }
 
+# Hard ceiling on plies analysed. Every ply is a (slow) Stockfish call, so an
+# oversized PGN is a CPU-exhaustion vector. Real games are well under this — a
+# 300-move game is 600 plies — so legitimate input is never rejected, while a
+# pathological multi-thousand-move PGN is refused before the engine loop.
+MAX_ANALYSIS_PLIES = 600
+
 
 def _cp_loss(eval_before: Optional[float], eval_after: Optional[float]) -> Optional[float]:
     if eval_before is None or eval_after is None:
@@ -122,6 +128,10 @@ def analyze_pgn(
     )
 
     positions = list(iter_positions(game))
+    if len(positions) > MAX_ANALYSIS_PLIES:
+        raise ValueError(
+            f"PGN is too long to analyse ({len(positions)} plies; limit is {MAX_ANALYSIS_PLIES})."
+        )
     config = _mode_config(mode, depth)
 
     boards: list[chess.Board] = []

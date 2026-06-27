@@ -11,3 +11,18 @@ stockfish/
 # Frontend dependencies and build output.
 frontend/node_modules/
 frontend/dist/
+
+# Environment files (secrets / connection strings).
+.env
+
+# Legacy local SQLite puzzle cache (replaced by PostgreSQL).
+puzzles.db
+puzzles.db-shm
+puzzles.db-wal
+
+# Player Modelling Engine local SQLite database (created at runtime).
+player_model.db
+player_model.db-shm
+player_model.db-wal
+# FAISS indices + PCA artifacts written by the local launcher (run_local.py).
+player_model_data/

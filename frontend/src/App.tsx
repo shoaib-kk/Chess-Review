@@ -22,12 +22,13 @@ import { OpeningRepertoirePage } from "./components/OpeningRepertoirePage";
 import { PlayerInsightsPage } from "./components/PlayerInsightsPage";
 import { PuzzlePage } from "./components/PuzzlePage";
 import { PgnInput } from "./components/PgnInput";
+import { PlayerModelApp } from "./playerModel/PlayerModelApp";
 import { SummaryStrip } from "./components/SummaryStrip";
 import { Surface } from "./components/ui/Surface";
 import { SAMPLE_GAME_PGN } from "./data/sampleGame";
 import type { AnalysisMode, ChessComGame, GameSummary, OpeningRepertoire, PlayerInsights, TimeClassFilter } from "./types";
 
-type AppMode = "home" | "chesscom" | "pgn" | "insights" | "repertoire" | "puzzles";
+type AppMode = "home" | "chesscom" | "pgn" | "insights" | "repertoire" | "puzzles" | "twin";
 const USERNAME_STORAGE_KEY = "cr_username";
 const NAV_COLLAPSED_KEY = "cr_nav_collapsed";
 
@@ -288,6 +289,8 @@ export default function App() {
           />
         ) : activeMode === "puzzles" ? (
                 <PuzzlePage username={sharedUsername} />
+              ) : activeMode === "twin" ? (
+                <PlayerModelApp />
               ) : loading && (activeMode === "chesscom" || activeMode === "pgn") ? (
                 <div className="mx-auto max-w-3xl py-6">
                   <AnalysisProgress plies={analysisInfo.plies} mode={analysisInfo.mode} />

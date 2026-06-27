@@ -3,8 +3,14 @@ from typing import Literal, Optional
 from pydantic import BaseModel, Field
 
 
+# A heavily annotated real game is a few KB; this ceiling blocks oversized
+# payloads up front, before the parser/engine sees them. The per-game ply cap
+# in game_analyzer.MAX_ANALYSIS_PLIES is the precise compute guard.
+MAX_PGN_CHARS = 200_000
+
+
 class AnalyzeRequest(BaseModel):
-    pgn: str = Field(..., min_length=1)
+    pgn: str = Field(..., min_length=1, max_length=MAX_PGN_CHARS)
     depth: int = Field(default=16, ge=1, le=24)
     mode: Literal["fast", "normal", "deep"] = "normal"
 
@@ -81,8 +87,8 @@ class ChessComGameResponse(BaseModel):
 
 
 class ChessComAnalyzeRequest(BaseModel):
-    username: str = Field(..., min_length=1)
-    pgn: str = Field(..., min_length=1)
+    username: str = Field(..., min_length=1, max_length=64)
+    pgn: str = Field(..., min_length=1, max_length=MAX_PGN_CHARS)
     depth: int = Field(default=16, ge=1, le=24)
     mode: Literal["fast", "normal", "deep"] = "normal"
 
