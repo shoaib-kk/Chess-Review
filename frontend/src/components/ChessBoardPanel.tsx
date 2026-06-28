@@ -1,7 +1,9 @@
-import { useState } from "react";
+import { Chess, type Square } from "chess.js";
+import { useEffect, useState } from "react";
 import { Chessboard } from "react-chessboard";
-import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, FlipVertical2, Swords } from "lucide-react";
-import type { GameSummary, MoveAnalysis } from "../types";
+import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, CornerUpLeft, FlipVertical2, Swords, Undo2 } from "lucide-react";
+import type { AnalysisLine, GameSummary, MoveAnalysis } from "../types";
+import { requestEngineMove } from "../api/client";
 import { classificationMeta } from "../utils/classification";
 import { isMateScore, mateInMoves } from "../utils/evalFormat";
 import { ExploreBoard } from "./ExploreBoard";
@@ -14,8 +16,39 @@ interface ChessboardPanelProps {
   moveIndex: number;
   flipped: boolean;
   reviewMyMovesOnly?: boolean;
+  analysisLine: AnalysisLine | null;
+  onAnalysisLineChange: (line: AnalysisLine | null) => void;
   onFlip: () => void;
   onMoveIndexChange: (index: number) => void;
+}
+
+/** Replay a list of SAN moves from a base FEN. Returns null on any illegal move. */
+function replayLine(baseFen: string, moves: string[]): { fen: string; turn: "w" | "b" } | null {
+  try {
+    const game = new Chess(baseFen);
+    for (const san of moves) game.move(san);
+    return { fen: game.fen(), turn: game.turn() };
+  } catch {
+    return null;
+  }
+}
+
+function lineSan(baseFen: string, moves: string[]): string {
+  try {
+    const game = new Chess(baseFen);
+    const white = game.turn() === "w";
+    const start = Number(baseFen.split(" ")[5] || "1");
+    const parts: string[] = [];
+    moves.forEach((san, i) => {
+      const moveNo = start + Math.floor((i + (white ? 0 : 1)) / 2);
+      if ((white && i % 2 === 0) || (!white && i % 2 === 1)) parts.push(`${moveNo}.`);
+      else if (i === 0) parts.push(`${moveNo}...`);
+      parts.push(san);
+    });
+    return parts.join(" ");
+  } catch {
+    return moves.join(" ");
+  }
 }
 
 function uciSquares(uci: string | null): [string, string] | null {
@@ -91,13 +124,48 @@ export function ChessboardPanel({
   moveIndex,
   flipped,
   reviewMyMovesOnly = false,
+  analysisLine,
+  onAnalysisLineChange,
   onFlip,
   onMoveIndexChange,
 }: ChessboardPanelProps) {
   const [exploreFen, setExploreFen] = useState<string | null>(null);
+  const [branchEval, setBranchEval] = useState<number | null>(null);
+  const [branchThinking, setBranchThinking] = useState(false);
 
   const move = moveIndex >= 0 ? summary.move_analyses[moveIndex] : undefined;
   const position = move?.fen_after ?? summary.initial_fen;
+
+  const branch = analysisLine ? replayLine(analysisLine.baseFen, analysisLine.moves) : null;
+  const inAnalysis = Boolean(analysisLine && branch);
+  const displayPosition = branch?.fen ?? position;
+
+  // Live engine eval for the explored position (reuses the play endpoint, whose
+  // eval_cp is the side-to-move score before its move).
+  useEffect(() => {
+    if (!branch) {
+      setBranchEval(null);
+      setBranchThinking(false);
+      return;
+    }
+    let cancelled = false;
+    setBranchThinking(true);
+    requestEngineMove(branch.fen)
+      .then((res) => {
+        if (cancelled) return;
+        const cp = res.eval_cp;
+        setBranchEval(cp === null || cp === undefined ? null : branch.turn === "w" ? cp : -cp);
+      })
+      .catch(() => {
+        if (!cancelled) setBranchEval(null);
+      })
+      .finally(() => {
+        if (!cancelled) setBranchThinking(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [branch?.fen, branch?.turn]);
 
   if (exploreFen) {
     return (
@@ -110,14 +178,65 @@ export function ChessboardPanel({
     );
   }
 
-  const currentEval = evalWhitePov(move);
+  const reviewEval = evalWhitePov(move);
+  const currentEval = inAnalysis ? branchEval : reviewEval;
   const whitePercent = evalBarPercent(currentEval);
   const leader = evalLeader(currentEval);
   const played = uciSquares(move?.played_move_uci ?? null);
   const best = uciSquares(move?.best_move_uci ?? null);
-  const highlightedSquare = mistakeSquare(move);
+  const highlightedSquare = inAnalysis ? null : mistakeSquare(move);
   const meta = move ? classificationMeta(move.classification) : null;
-  const annotationSquare = meta && meta.boardSymbol ? played?.[1] : null;
+  const annotationSquare = !inAnalysis && meta && meta.boardSymbol ? played?.[1] : null;
+
+  function appendMove(from: string, to: string, promotion = "q"): boolean {
+    const baseFen = inAnalysis && branch ? branch.fen : position;
+    let game: Chess;
+    try {
+      game = new Chess(baseFen);
+    } catch {
+      return false;
+    }
+    let result;
+    try {
+      result = game.move({ from, to, promotion });
+    } catch {
+      return false;
+    }
+    if (!result) return false;
+    if (inAnalysis && analysisLine) {
+      onAnalysisLineChange({ baseFen: analysisLine.baseFen, moves: [...analysisLine.moves, result.san] });
+    } else {
+      onAnalysisLineChange({ baseFen: position, moves: [result.san] });
+    }
+    return true;
+  }
+
+  function isPromotionDrop(from: string, to: string): boolean {
+    const baseFen = inAnalysis && branch ? branch.fen : position;
+    try {
+      const piece = new Chess(baseFen).get(from as Square);
+      if (!piece || piece.type !== "p") return false;
+      return (piece.color === "w" && to[1] === "8") || (piece.color === "b" && to[1] === "1");
+    } catch {
+      return false;
+    }
+  }
+
+  function onPieceDrop(source: string, target: string): boolean {
+    if (isPromotionDrop(source, target)) return false; // handled by promotion dialog
+    return appendMove(source, target);
+  }
+
+  function onPromotionPieceSelect(piece?: string, from?: string, to?: string): boolean {
+    if (!piece || !from || !to) return false;
+    return appendMove(from, to, piece[1].toLowerCase());
+  }
+
+  function takeBackBranch() {
+    if (!analysisLine) return;
+    if (analysisLine.moves.length <= 1) onAnalysisLineChange(null);
+    else onAnalysisLineChange({ baseFen: analysisLine.baseFen, moves: analysisLine.moves.slice(0, -1) });
+  }
 
   const navigationIndexes =
     reviewMyMovesOnly && summary.user_color
@@ -131,10 +250,12 @@ export function ChessboardPanel({
   const previousIndex = [...navigationIndexes].reverse().find((index) => index < moveIndex) ?? firstIndex;
   const nextIndex = navigationIndexes.find((index) => index > moveIndex) ?? lastIndex;
 
-  const arrows = [
-    played ? [played[0], played[1], "#c8a15a"] : null,
-    best && move?.best_move_uci !== move?.played_move_uci ? [best[0], best[1], "#5cb585"] : null,
-  ].filter(Boolean);
+  const arrows = inAnalysis
+    ? []
+    : [
+        played ? [played[0], played[1], "#c8a15a"] : null,
+        best && move?.best_move_uci !== move?.played_move_uci ? [best[0], best[1], "#5cb585"] : null,
+      ].filter(Boolean);
 
   const customSquareStyles =
     highlightedSquare && meta
@@ -152,11 +273,17 @@ export function ChessboardPanel({
           <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-app-faint">Position</p>
           <div className="mt-1 flex flex-wrap items-center gap-3">
             <span className="font-mono text-2xl font-semibold text-app-text">{moveLabel(move)}</span>
-            {move && <ClassificationBadge classification={move.classification} />}
+            {inAnalysis ? (
+              <span className="rounded-full bg-app-accent/15 px-2 py-0.5 font-mono text-[11px] font-semibold text-app-accent">
+                Analysis{branchThinking ? " · …" : ""}
+              </span>
+            ) : (
+              move && <ClassificationBadge classification={move.classification} />
+            )}
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="secondary" size="sm" onClick={() => setExploreFen(position)}>
+          <Button variant="secondary" size="sm" onClick={() => setExploreFen(displayPosition)}>
             <Swords className="h-4 w-4" />
             Play from here
           </Button>
@@ -196,10 +323,12 @@ export function ChessboardPanel({
           <div className="chessboard-animated relative">
             <Chessboard
               id={1}
-              position={position}
+              position={displayPosition}
               animationDuration={220}
               boardOrientation={flipped ? "black" : "white"}
-              arePiecesDraggable={false}
+              arePiecesDraggable
+              onPieceDrop={onPieceDrop}
+              onPromotionPieceSelect={onPromotionPieceSelect}
               customBoardStyle={{
                 overflow: "hidden",
               }}
@@ -222,6 +351,30 @@ export function ChessboardPanel({
             )}
           </div>
         </div>
+
+        {inAnalysis && analysisLine ? (
+          <div className="mt-4 rounded-lg border border-app-accent/30 bg-app-accent/5 px-3 py-2.5">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-app-accent">Exploring line</p>
+                <p className="mt-1 break-words font-mono text-xs leading-5 text-app-text">
+                  {lineSan(analysisLine.baseFen, analysisLine.moves)}
+                </p>
+              </div>
+              <div className="flex shrink-0 items-center gap-2">
+                <Button variant="control" size="sm" onClick={takeBackBranch} aria-label="Take back one move">
+                  <Undo2 className="h-4 w-4" />
+                </Button>
+                <Button variant="secondary" size="sm" onClick={() => onAnalysisLineChange(null)}>
+                  <CornerUpLeft className="h-4 w-4" />
+                  Back to game
+                </Button>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <p className="mt-4 text-center text-xs text-app-faint">Drag a piece to explore a line — the eval updates live.</p>
+        )}
 
         <div className="mt-4 grid grid-cols-[1fr_1fr_minmax(74px,0.8fr)_1fr_1fr] gap-2">
           <Button variant="control" size="sm" onClick={() => onMoveIndexChange(firstIndex)} aria-label="First move">

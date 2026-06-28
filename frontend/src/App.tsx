@@ -21,13 +21,15 @@ import { MoveListPanel } from "./components/MoveList";
 import { OpeningRepertoirePage } from "./components/OpeningRepertoirePage";
 import { PlayerInsightsPage } from "./components/PlayerInsightsPage";
 import { PuzzlePage } from "./components/PuzzlePage";
+import { TrainingPage } from "./components/TrainingPage";
+import { DailyPage } from "./components/DailyPage";
 import { PgnInput } from "./components/PgnInput";
 import { SummaryStrip } from "./components/SummaryStrip";
 import { Surface } from "./components/ui/Surface";
 import { SAMPLE_GAME_PGN } from "./data/sampleGame";
-import type { AnalysisMode, ChessComGame, GameSummary, OpeningRepertoire, PlayerInsights, TimeClassFilter } from "./types";
+import type { AnalysisLine, AnalysisMode, ChessComGame, GameSummary, InboxGame, OpeningRepertoire, PlayerInsights, TimeClassFilter } from "./types";
 
-type AppMode = "home" | "chesscom" | "pgn" | "insights" | "repertoire" | "puzzles";
+type AppMode = "home" | "chesscom" | "pgn" | "insights" | "repertoire" | "puzzles" | "training" | "daily";
 const USERNAME_STORAGE_KEY = "cr_username";
 const NAV_COLLAPSED_KEY = "cr_nav_collapsed";
 
@@ -58,6 +60,9 @@ export default function App() {
   const [moveIndex, setMoveIndex] = useState(-1);
   const [flipped, setFlipped] = useState(false);
   const [reviewMyMovesOnly, setReviewMyMovesOnly] = useState(false);
+  // Interactive exploration line on the review board (drag pieces / step the best
+  // line). Cleared whenever the selected move or game changes.
+  const [analysisLine, setAnalysisLine] = useState<AnalysisLine | null>(null);
   const [loading, setLoading] = useState(false);
   const [analysisInfo, setAnalysisInfo] = useState<{ plies: number; mode: AnalysisMode }>({ plies: 0, mode: "normal" });
   const [error, setError] = useState<string | null>(null);
@@ -67,6 +72,11 @@ export default function App() {
       .then(() => setApiStatus("ok"))
       .catch(() => setApiStatus("down"));
   }, []);
+
+  // Leaving the current move (or loading a new game) drops any exploration line.
+  useEffect(() => {
+    setAnalysisLine(null);
+  }, [moveIndex, summary]);
 
   useEffect(() => {
     const trimmed = sharedUsername.trim();
@@ -246,6 +256,13 @@ export default function App() {
     await handleAnalyzeChessComGame(sharedUsername, game.pgn, chessComAnalysisMode);
   }
 
+  async function reviewInboxGame(game: InboxGame) {
+    // Opening an auto-imported game reviews it (and marks it reviewed server-side
+    // since /chesscom/analyze persists it as reviewed for this device).
+    setActiveMode("chesscom");
+    await handleAnalyzeChessComGame(sharedUsername, game.pgn, chessComAnalysisMode);
+  }
+
   return (
     <AppShell>
       <Header
@@ -281,6 +298,9 @@ export default function App() {
             onOpenInsights={() => setActiveMode("insights")}
             onOpenRepertoire={() => setActiveMode("repertoire")}
             onOpenPuzzles={() => setActiveMode("puzzles")}
+            onOpenTraining={() => setActiveMode("training")}
+            onOpenDaily={() => setActiveMode("daily")}
+            onReviewInboxGame={reviewInboxGame}
             sampleLoading={loading}
             activeReview={summary}
             onResumeReview={resumeReview}
@@ -288,6 +308,10 @@ export default function App() {
           />
         ) : activeMode === "puzzles" ? (
                 <PuzzlePage username={sharedUsername} />
+              ) : activeMode === "training" ? (
+                <TrainingPage username={sharedUsername} />
+              ) : activeMode === "daily" ? (
+                <DailyPage username={sharedUsername} />
               ) : loading && (activeMode === "chesscom" || activeMode === "pgn") ? (
                 <div className="mx-auto max-w-3xl py-6">
                   <AnalysisProgress plies={analysisInfo.plies} mode={analysisInfo.mode} />
@@ -382,6 +406,8 @@ export default function App() {
                       moveIndex={moveIndex}
                       flipped={flipped}
                       reviewMyMovesOnly={reviewMyMovesOnly}
+                      analysisLine={analysisLine}
+                      onAnalysisLineChange={setAnalysisLine}
                       onFlip={() => setFlipped((value) => !value)}
                       onMoveIndexChange={setMoveIndex}
                     />
@@ -392,7 +418,13 @@ export default function App() {
                       <EvalGraphPanel summary={summary} currentIndex={moveIndex} onSelectMove={setMoveIndex} embedded />
                     </Surface>
                     <Surface className="p-5 sm:p-6">
-                      <AnalysisPanel summary={summary} currentIndex={moveIndex} embedded />
+                      <AnalysisPanel
+                        summary={summary}
+                        currentIndex={moveIndex}
+                        analysisLine={analysisLine}
+                        onPlayLine={setAnalysisLine}
+                        embedded
+                      />
                     </Surface>
                     <Surface className="overflow-hidden p-5 sm:p-6">
                       <MoveListPanel

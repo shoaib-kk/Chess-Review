@@ -2,7 +2,9 @@ import {
   BarChart3,
   BookOpen,
   Download,
+  Dumbbell,
   FileText,
+  Flame,
   Home,
   LogOut,
   PanelLeftClose,
@@ -13,7 +15,7 @@ import {
 import type { LucideIcon } from "lucide-react";
 import { ChessGlyph } from "./ui/ChessGlyph";
 
-type Mode = "home" | "chesscom" | "pgn" | "insights" | "repertoire" | "puzzles";
+type Mode = "home" | "chesscom" | "pgn" | "insights" | "repertoire" | "puzzles" | "training" | "daily";
 
 interface HeaderProps {
   activeMode: Mode;
@@ -42,11 +44,18 @@ const navSections: { heading: string; items: NavItem[] }[] = [
     ],
   },
   {
+    heading: "Train",
+    items: [
+      { mode: "daily", label: "Daily", icon: Flame, title: "Today's puzzle set and your streak" },
+      { mode: "training", label: "Training plan", icon: Dumbbell, title: "Play-out drills targeting your weaknesses" },
+      { mode: "puzzles", label: "Puzzles", icon: Puzzle, title: "Tactics built from your own games" },
+    ],
+  },
+  {
     heading: "Analysis",
     items: [
       { mode: "insights", label: "Insights", icon: BarChart3, title: "Win rate, accuracy, and trends over time" },
       { mode: "repertoire", label: "Repertoire", icon: BookOpen, title: "Your openings and where to improve" },
-      { mode: "puzzles", label: "Puzzles", icon: Puzzle, title: "Tactics built from your own games" },
     ],
   },
 ];

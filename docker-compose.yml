@@ -3,6 +3,12 @@ services:
     image: postgres:17
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-chess}
+      # NOTE: the ":-chess" default exists ONLY so a bare `docker compose up`
+      # works out of the box for local development. PRODUCTION MUST set a strong
+      # POSTGRES_PASSWORD via the environment or a `.env` file — never ship with
+      # the weak "chess" default. The backend's DATABASE_URL below interpolates
+      # the very same vars, so overriding POSTGRES_PASSWORD here propagates there
+      # automatically.
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-chess}
       POSTGRES_DB: ${POSTGRES_DB:-chess}
     # Intentionally NO published ports: Postgres is reachable only on the
@@ -16,6 +22,20 @@ services:
       retries: 10
     restart: unless-stopped
 
+  redis:
+    image: redis:7-alpine
+    # Like db, intentionally NO published ports: Redis holds rate-limit counters
+    # and puzzle-progress state and is reachable only on the internal Docker
+    # network, never from the public internet.
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
   backend:
     build:
       context: .
@@ -23,8 +43,19 @@ services:
     environment:
       STOCKFISH_PATH: /usr/games/stockfish
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-chess}:${POSTGRES_PASSWORD:-chess}@db:5432/${POSTGRES_DB:-chess}
+      # Shared across all backend instances so rate-limit counters and puzzle
+      # progress are correct (and not bypassable) when more than one instance
+      # runs. Hostname "redis" resolves on the internal Docker network.
+      REDIS_URL: redis://redis:6379/0
+      # Fail-closed: APP_ENV must be non-dev in production so DATABASE_URL is
+      # required rather than falling back to the weak local default.
+      APP_ENV: production
+      # The bundled nginx sets X-Real-IP; trust it for accurate per-client limiting.
+      TRUST_PROXY_HEADERS: "true"
     depends_on:
       db:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     expose:
       - "8001"
@@ -43,3 +74,4 @@ services:
 
 volumes:
   pgdata:
+  redisdata:

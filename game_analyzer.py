@@ -15,11 +15,19 @@ from stockfish_engine import StockfishEngine
 # Depth caps per mode. "normal" is the default the UI uses; depth 12 was too
 # shallow to see the short tactics amateurs actually blunder, so it would happily
 # label a losing move "Excellent". 16 is a reasonable accuracy/speed balance.
+#
+# ``multipv`` is the number of candidate lines requested per position. The UI
+# shows the top few choices with their evals, and the gap between the best and
+# second-best line tells us how forced the position was (used to award "Great").
 ANALYSIS_MODES = {
-    "fast": {"max_depth": 10, "pv_limit": 2},
-    "normal": {"max_depth": 16, "pv_limit": 4},
-    "deep": {"max_depth": 24, "pv_limit": 8},
+    "fast": {"max_depth": 10, "multipv": 2},
+    "normal": {"max_depth": 16, "multipv": 3},
+    "deep": {"max_depth": 24, "multipv": 4},
 }
+
+# How many plies of each principal variation we keep as SAN, so the best line is
+# long enough to actually step through on the board.
+PV_SAN_LENGTH = 10
 
 # Hard ceiling on plies analysed. Every ply is a (slow) Stockfish call, so an
 # oversized PGN is a CPU-exhaustion vector. Real games are well under this — a
@@ -85,11 +93,52 @@ def _is_sacrifice(board_before: chess.Board, pv_san: list) -> bool:
     return (start_balance - end_balance) >= 2
 
 
+def _offers_material(board_before: chess.Board, played_move: chess.Move) -> bool:
+    """Does the played move hand the opponent a material-winning capture?
+
+    One-ply check on the position after the move: if the opponent can capture for
+    a net gain of at least a minor piece (accounting for an immediate recapture),
+    the move offered material. Combined with engine approval this is what makes a
+    move a *sacrifice* rather than a blunder — see ``classify_move``.
+    """
+    board = board_before.copy()
+    try:
+        board.push(played_move)
+    except (ValueError, AssertionError):
+        return False
+
+    best_net = 0
+    for move in board.legal_moves:
+        if not board.is_capture(move):
+            continue
+        if board.is_en_passant(move):
+            captured_val = _PIECE_VALUES[chess.PAWN]
+        else:
+            victim = board.piece_at(move.to_square)
+            if victim is None:
+                continue
+            captured_val = _PIECE_VALUES[victim.piece_type]
+        attacker = board.piece_at(move.from_square)
+        attacker_val = _PIECE_VALUES[attacker.piece_type] if attacker else 0
+
+        board.push(move)
+        can_recapture = any(
+            reply.to_square == move.to_square and board.is_capture(reply)
+            for reply in board.legal_moves
+        )
+        board.pop()
+
+        net = captured_val - attacker_val if can_recapture else captured_val
+        best_net = max(best_net, net)
+
+    return best_net >= 2
+
+
 def _mode_config(mode: str, requested_depth: int) -> dict:
     config = ANALYSIS_MODES.get(mode, ANALYSIS_MODES["normal"])
     return {
         "depth": min(requested_depth, config["max_depth"]),
-        "pv_limit": config["pv_limit"],
+        "multipv": config["multipv"],
     }
 
 
@@ -162,23 +211,37 @@ def analyze_pgn(
             cached = analysis_cache.get(fen)
 
             if cached is None or (include_pv and not cached["has_pv"]):
-                eval_cp, best_move_san, pv = engine.analyse_position(
-                    board,
-                    depth=config["depth"],
-                    include_pv=include_pv,
-                    pv_limit=config["pv_limit"],
-                )
-                cached = {
-                    "eval": eval_cp,
-                    "best_move": best_move_san,
-                    "pv": pv,
-                    "has_pv": include_pv,
-                }
+                if include_pv:
+                    candidates = engine.analyse_candidates(
+                        board,
+                        depth=config["depth"],
+                        multipv=config["multipv"],
+                        pv_limit=PV_SAN_LENGTH,
+                    )
+                    best = candidates[0] if candidates else None
+                    cached = {
+                        "eval": best["eval"] if best else None,
+                        "best_move": best["move"] if best else None,
+                        "pv": best["pv"] if best else [],
+                        "top_moves": candidates,
+                        "has_pv": True,
+                    }
+                else:
+                    eval_cp, _best, _pv = engine.analyse_position(
+                        board, depth=config["depth"], include_pv=False
+                    )
+                    cached = {
+                        "eval": eval_cp,
+                        "best_move": None,
+                        "pv": [],
+                        "top_moves": [],
+                        "has_pv": False,
+                    }
                 analysis_cache[fen] = cached
 
             position_results.append(cached)
 
-        for idx, (board_before, _move, move_number, color, san) in enumerate(positions, 1):
+        for idx, (board_before, played_move, move_number, color, san) in enumerate(positions, 1):
             fen_before = board_before.fen()
             before = position_results[idx - 1]
             after = position_results[idx]
@@ -189,6 +252,10 @@ def analyze_pgn(
             is_best = best_san is not None and san == best_san
             is_book = idx <= summary.opening_matched_plies
             is_sacrifice = _is_sacrifice(board_before, before["pv"]) if is_best else False
+            offers_material = _offers_material(board_before, played_move)
+
+            top_moves = before["top_moves"]
+            second_best_eval = top_moves[1]["eval"] if len(top_moves) > 1 else None
 
             classification = classify_move(
                 eval_before=before["eval"],
@@ -197,6 +264,8 @@ def analyze_pgn(
                 is_book=is_book,
                 is_best_move=is_best,
                 is_sacrifice=is_sacrifice,
+                offers_material=offers_material,
+                second_best_eval=second_best_eval,
             )
 
             analysis = MoveAnalysis(
@@ -210,6 +279,10 @@ def analyze_pgn(
                 classification=classification,
                 pv=before["pv"],
                 fen_before=fen_before,
+                top_moves=[
+                    {"move": cand["move"], "eval": cand["eval"]}
+                    for cand in top_moves
+                ],
             )
             summary.move_analyses.append(analysis)
             summary.record_classification(color, classification)

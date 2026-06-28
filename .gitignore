@@ -15,7 +15,10 @@ frontend/dist/
 # Environment files (secrets / connection strings).
 .env
 
+# Local databases and log files.
+*.db
+*.log
+
 # Legacy local SQLite puzzle cache (replaced by PostgreSQL).
-puzzles.db
 puzzles.db-shm
 puzzles.db-wal

@@ -12,6 +12,7 @@ from enum import Enum
 class MoveClassification(str, Enum):
     BOOK = "Book"
     BRILLIANT = "Brilliant"
+    GREAT = "Great"
     BEST = "Best"
     EXCELLENT = "Excellent"
     GOOD = "Good"
@@ -24,6 +25,7 @@ class MoveClassification(str, Enum):
 CLASSIFICATION_EMOJIS = {
     MoveClassification.BOOK: "",
     MoveClassification.BRILLIANT: "!!",
+    MoveClassification.GREAT: "!",
     MoveClassification.BEST: "★",
     MoveClassification.EXCELLENT: "!",
     MoveClassification.GOOD: "",
@@ -36,6 +38,7 @@ CLASSIFICATION_EMOJIS = {
 CLASSIFICATION_COLORS = {
     MoveClassification.BOOK: "#94a3b8",
     MoveClassification.BRILLIANT: "#22d3ee",
+    MoveClassification.GREAT: "#5b8def",
     MoveClassification.BEST: "#34d399",
     MoveClassification.EXCELLENT: "#4ade80",
     MoveClassification.GOOD: "#a3e635",
@@ -104,35 +107,60 @@ def classify_move(
     is_book: bool = False,
     is_best_move: bool = False,
     is_sacrifice: bool = False,
+    offers_material: bool = False,
+    second_best_eval: Optional[float] = None,
 ) -> MoveClassification:
     """Classify a move using win-probability loss (consistent with accuracy).
 
     The labels mirror the vocabulary players already know from Chess.com/Lichess:
-    Book, Brilliant, Best, Excellent, Good, Inaccuracy, Mistake, Miss, Blunder.
-    Thresholds are in win-probability points lost, so a small slip in an equal
-    position is treated as more serious than the same centipawn loss when already
-    winning.
+    Book, Brilliant, Great, Best, Excellent, Good, Inaccuracy, Mistake, Miss,
+    Blunder. Thresholds are in win-probability points lost, so a small slip in an
+    equal position is treated as more serious than the same centipawn loss when
+    already winning.
+
+    ``offers_material`` (the played move hangs material the opponent can grab) and
+    ``second_best_eval`` (the engine's runner-up line, mover POV) let us spot
+    genuine sacrifices that are not literally the #1 move and "only moves" where
+    every alternative is much worse.
     """
     if is_book:
         return MoveClassification.BOOK
 
+    wpl = win_probability_loss(eval_before, eval_after)
+    best_win_chance = cp_to_win_chance(eval_before) or 0.0
+    played_win_chance = (
+        cp_to_win_chance(-eval_after) if eval_after is not None else None
+    ) or 0.0
+
+    # --- Brilliant ----------------------------------------------------------
+    # A real sacrifice the engine endorses. We no longer require it to be the
+    # literal top move: a move that offers material (or whose best line gives it
+    # up) and still keeps the side to move out of a losing position is brilliant,
+    # whether it is #1 or just very close to it.
+    sacrifices = is_sacrifice or offers_material
+    engine_endorsed = is_best_move or (wpl is not None and wpl <= 5.0)
+    not_losing_after = played_win_chance >= 45.0
+    if sacrifices and engine_endorsed and not_losing_after:
+        return MoveClassification.BRILLIANT
+
+    # --- Great --------------------------------------------------------------
+    # The critical move: the player found the best move and every alternative is
+    # meaningfully worse (a large gap to the engine's second choice). This is the
+    # "only move" players expect to be rewarded for.
     if is_best_move:
-        # Playing the engine's top move. A sound sacrifice that keeps the
-        # position at least equal earns "Brilliant"; otherwise just "Best".
-        if is_sacrifice and (cp_to_win_chance(eval_before) or 0.0) >= 50.0:
-            return MoveClassification.BRILLIANT
+        if second_best_eval is not None and eval_before is not None:
+            gap = eval_before - second_best_eval  # both mover POV, centipawns
+            second_win_chance = cp_to_win_chance(second_best_eval) or 0.0
+            if gap >= 200.0 and (best_win_chance - second_win_chance) >= 15.0:
+                return MoveClassification.GREAT
         return MoveClassification.BEST
 
-    wpl = win_probability_loss(eval_before, eval_after)
     if wpl is None:
         return _classify_by_cp_loss(cp_loss)
 
-    best_win_chance = cp_to_win_chance(eval_before) or 0.0
-    played_win_chance = cp_to_win_chance(-eval_after) if eval_after is not None else 0.0
-
     # "Miss": a clearly winning continuation was available and thrown away, but
     # the position is not yet lost (that would be a Blunder).
-    if wpl >= 10.0 and best_win_chance >= 85.0 and (played_win_chance or 0.0) >= 50.0:
+    if wpl >= 10.0 and best_win_chance >= 85.0 and played_win_chance >= 50.0:
         return MoveClassification.MISS
 
     if wpl <= 2.0:
@@ -158,6 +186,9 @@ class MoveAnalysis:
     classification: MoveClassification
     pv: list = field(default_factory=list)
     fen_before: str = ""
+    # Top engine candidate moves at this position, best first:
+    # [{"move": san, "eval": cp_mover_pov}, ...].
+    top_moves: list = field(default_factory=list)
 
     @property
     def eval_white_pov(self) -> Optional[float]:

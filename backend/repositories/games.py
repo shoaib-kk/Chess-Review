@@ -13,10 +13,12 @@ import logging
 from typing import Any
 
 import chess.pgn
-from sqlalchemy import select
+from sqlalchemy import func, select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
-from ..db_models import Game
+from ..db import SessionLocal
+from ..db_models import Game, ImportCursor
 
 logger = logging.getLogger(__name__)
 
@@ -72,6 +74,7 @@ def _metrics_from_summary(summary: Any, analysis_json: dict[str, Any] | None) ->
 def get_or_create_game(
     session: Session,
     *,
+    owner_id: str | None,
     username: str | None,
     game_url: str | None,
     game_date: str | None,
@@ -84,17 +87,20 @@ def get_or_create_game(
 ) -> Game:
     """Return the existing game row or insert a new one.
 
-    Dedup key is ``(username, game_url)`` when a chess.com URL is present,
-    otherwise ``(username, pgn_hash)`` for pasted PGNs. The caller is
+    Ownership/dedup is scoped to ``owner_id`` (the device id): the key is
+    ``(owner_id, game_url)`` when a chess.com URL is present, otherwise
+    ``(owner_id, pgn_hash)`` for pasted PGNs. ``username`` is stored as the
+    Chess.com player identity (color/display), not for scoping. The caller is
     responsible for committing the surrounding transaction.
     """
     digest = pgn_hash(pgn)
+    norm_owner = owner_id or None
     norm_user = username or None
 
     if game_url:
-        stmt = select(Game).where(Game.username == norm_user, Game.game_url == game_url)
+        stmt = select(Game).where(Game.owner_id == norm_owner, Game.game_url == game_url)
     else:
-        stmt = select(Game).where(Game.username == norm_user, Game.pgn_hash == digest)
+        stmt = select(Game).where(Game.owner_id == norm_owner, Game.pgn_hash == digest)
     existing = session.execute(stmt).scalar_one_or_none()
     if existing is not None:
         return existing
@@ -104,6 +110,7 @@ def get_or_create_game(
     analysis_version = f"{mode}-d{depth}" if mode and depth else None
 
     game = Game(
+        owner_id=norm_owner,
         username=norm_user,
         game_url=game_url,
         pgn_hash=digest,
@@ -132,6 +139,7 @@ def get_or_create_game(
 def save_reviewed_game(
     session: Session,
     *,
+    owner_id: str | None,
     username: str | None,
     pgn: str,
     summary: Any,
@@ -141,8 +149,9 @@ def save_reviewed_game(
     mode: str | None = None,
 ) -> None:
     """Persist an interactively reviewed game (idempotent). Commits on success."""
-    get_or_create_game(
+    game = get_or_create_game(
         session,
+        owner_id=owner_id,
         username=username,
         game_url=game_url,
         game_date=(analysis_json or {}).get("date"),
@@ -153,4 +162,106 @@ def save_reviewed_game(
         depth=depth,
         mode=mode,
     )
+    # Opening a game in review clears it from the "ready to review" inbox.
+    game.reviewed = True
     session.commit()
+
+
+# ── auto-import inbox + Chess.com polling cursor ────────────────────────────
+
+def get_inbox(owner_id: str, limit: int = 50) -> list[dict[str, Any]]:
+    """Auto-imported games this device has not yet opened in review."""
+    with SessionLocal() as session:
+        rows = session.execute(
+            select(Game)
+            .where(
+                Game.owner_id == owner_id,
+                Game.source == "import",
+                Game.reviewed.is_(False),
+            )
+            .order_by(Game.uploaded_at.desc())
+            .limit(limit)
+        ).scalars().all()
+    return [
+        {
+            "id": game.id,
+            "game_url": game.game_url,
+            "game_date": game.game_date,
+            "white_player": game.white_player,
+            "black_player": game.black_player,
+            "result": game.result,
+            "opening": game.opening,
+            "pgn": game.original_pgn,
+        }
+        for game in rows
+    ]
+
+
+def count_inbox(owner_id: str) -> int:
+    with SessionLocal() as session:
+        return int(
+            session.execute(
+                select(func.count())
+                .select_from(Game)
+                .where(
+                    Game.owner_id == owner_id,
+                    Game.source == "import",
+                    Game.reviewed.is_(False),
+                )
+            ).scalar_one()
+        )
+
+
+def get_import_cursor(device_id: str, username: str) -> int | None:
+    """Last auto-imported game's ``end_time`` for this (device, username)."""
+    with SessionLocal() as session:
+        return session.execute(
+            select(ImportCursor.last_end_time).where(
+                ImportCursor.device_id == device_id,
+                ImportCursor.username == username,
+            )
+        ).scalar_one_or_none()
+
+
+def set_import_cursor(device_id: str, username: str, last_end_time: int) -> None:
+    with SessionLocal() as session:
+        stmt = (
+            pg_insert(ImportCursor)
+            .values(device_id=device_id, username=username, last_end_time=last_end_time)
+            .on_conflict_do_update(
+                constraint="pk_import_cursors",
+                set_={"last_end_time": last_end_time, "updated_at": func.now()},
+            )
+        )
+        session.execute(stmt)
+        session.commit()
+
+
+def save_imported_game(
+    *,
+    owner_id: str,
+    username: str,
+    game_url: str | None,
+    game_date: str | None,
+    pgn: str,
+) -> None:
+    """Persist an auto-imported Chess.com game (not yet analysed/reviewed)."""
+    session = SessionLocal()
+    try:
+        get_or_create_game(
+            session,
+            owner_id=owner_id,
+            username=username,
+            game_url=game_url,
+            game_date=game_date,
+            pgn=pgn,
+            summary=None,
+            analysis_json=None,
+            source="import",
+        )
+        session.commit()
+    except Exception:
+        session.rollback()
+        raise
+    finally:
+        session.close()

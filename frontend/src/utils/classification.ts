@@ -48,6 +48,19 @@ export const CLASSIFICATION_META: Record<MoveClassification, ClassificationMeta>
     isError: false,
     isHighlight: true,
   },
+  // The critical "only move" — found the best move when alternatives were much
+  // worse. Blue, distinct from Brilliant's teal and the green positive family.
+  Great: {
+    label: "Great",
+    badgeSymbol: "!",
+    boardSymbol: "!",
+    color: "#5b8def",
+    tone: "blue",
+    textClass: "text-[#8ab0ff]",
+    annotation: { backgroundColor: "#5b8def", color: "#04132e" },
+    isError: false,
+    isHighlight: true,
+  },
   // Best / Excellent / Good share one green family — a single positive hue
   // rather than three competing greens.
   Best: {

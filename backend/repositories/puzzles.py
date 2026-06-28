@@ -40,12 +40,12 @@ _DIFFICULTY_CLASSIFICATION: dict[str, str] = {
 
 # ── read helpers used by the puzzles router / progress ──────────────────────
 
-def get_analyzed_urls(username: str) -> set[str]:
-    """URLs of games already mined for this user (so they aren't re-analysed)."""
+def get_analyzed_urls(owner_id: str) -> set[str]:
+    """URLs of games already mined for this device (so they aren't re-analysed)."""
     with SessionLocal() as session:
         rows = session.execute(
             select(Game.game_url).where(
-                Game.username == username,
+                Game.owner_id == owner_id,
                 Game.mined.is_(True),
                 Game.game_url.is_not(None),
             )
@@ -53,37 +53,37 @@ def get_analyzed_urls(username: str) -> set[str]:
     return {row[0] for row in rows if row[0]}
 
 
-def get_analyzed_count(username: str) -> int:
+def get_analyzed_count(owner_id: str) -> int:
     with SessionLocal() as session:
         return int(
             session.execute(
                 select(func.count())
                 .select_from(Game)
-                .where(Game.username == username, Game.mined.is_(True))
+                .where(Game.owner_id == owner_id, Game.mined.is_(True))
             ).scalar_one()
         )
 
 
-def get_puzzle_count(username: str) -> int:
+def get_puzzle_count(owner_id: str) -> int:
     with SessionLocal() as session:
         return int(
             session.execute(
                 select(func.count())
                 .select_from(Puzzle)
                 .join(Game, Puzzle.game_id == Game.id)
-                .where(Game.username == username, Puzzle.evaluation_before >= 0)
+                .where(Game.owner_id == owner_id, Puzzle.evaluation_before >= 0)
             ).scalar_one()
         )
 
 
-def get_phase_counts(username: str) -> dict[str, int]:
+def get_phase_counts(owner_id: str) -> dict[str, int]:
     """Count available puzzles per phase (for the lobby), ignoring difficulty."""
     counts = {"all": 0, "opening": 0, "middlegame": 0, "endgame": 0}
     with SessionLocal() as session:
         rows = session.execute(
             select(Puzzle.move_number)
             .join(Game, Puzzle.game_id == Game.id)
-            .where(Game.username == username, Puzzle.evaluation_before >= 0)
+            .where(Game.owner_id == owner_id, Puzzle.evaluation_before >= 0)
         ).all()
     for (move_number,) in rows:
         move_number = move_number or 0
@@ -140,7 +140,7 @@ def _serialize(puzzle: Puzzle, game: Game) -> dict[str, Any]:
 
 
 def get_puzzles(
-    username: str,
+    owner_id: str,
     limit: int = 100,
     offset: int = 0,
     phase: str | None = None,
@@ -149,7 +149,7 @@ def get_puzzles(
     stmt = (
         select(Puzzle, Game)
         .join(Game, Puzzle.game_id == Game.id)
-        .where(Game.username == username, Puzzle.evaluation_before >= 0)
+        .where(Game.owner_id == owner_id, Puzzle.evaluation_before >= 0)
     )
     stmt = _apply_phase(stmt, phase)
     stmt = _apply_difficulty(stmt, difficulty)
@@ -159,12 +159,12 @@ def get_puzzles(
     return [_serialize(puzzle, game) for puzzle, game in rows]
 
 
-def mark_solved(username: str, puzzle_id: int) -> None:
+def mark_solved(owner_id: str, puzzle_id: int) -> None:
     with SessionLocal() as session:
         puzzle = session.execute(
             select(Puzzle)
             .join(Game, Puzzle.game_id == Game.id)
-            .where(Puzzle.id == puzzle_id, Game.username == username)
+            .where(Puzzle.id == puzzle_id, Game.owner_id == owner_id)
         ).scalar_one_or_none()
         if puzzle is not None:
             puzzle.solved = True
@@ -175,6 +175,7 @@ def mark_solved(username: str, puzzle_id: int) -> None:
 
 def save_mined_puzzles(
     *,
+    owner_id: str,
     username: str,
     game_url: str,
     game_date: str,
@@ -187,14 +188,17 @@ def save_mined_puzzles(
 ) -> None:
     """Persist a mined game and its puzzles in one transaction (idempotent).
 
-    Creates (or reuses) the parent ``games`` row, marks it ``mined`` — so even a
-    game that yields zero puzzles is not re-analysed — and bulk-inserts puzzles,
-    skipping any that already exist for the game (unique ``game_id, move_number``).
+    Creates (or reuses) the parent ``games`` row owned by ``owner_id`` (the
+    device), marks it ``mined`` — so even a game that yields zero puzzles is not
+    re-analysed — and bulk-inserts puzzles, skipping any that already exist for
+    the game (unique ``game_id, move_number``). ``username`` is the Chess.com
+    player identity stored for color/display.
     """
     session: Session = SessionLocal()
     try:
         game = get_or_create_game(
             session,
+            owner_id=owner_id,
             username=username,
             game_url=game_url or None,
             game_date=game_date,

@@ -80,7 +80,7 @@ export function PuzzlePage({ username }: PuzzlePageProps) {
     if (!trimmedUsername) return;
     if (shouldShowLoading) setLoading(true);
     try {
-      const data = await fetchPuzzles(trimmedUsername, {
+      const data = await fetchPuzzles({
         phase: selectedPhase === "all" ? undefined : selectedPhase,
       });
       setPuzzles(shuffledPuzzles(data.puzzles, shuffleSeedRef.current));
@@ -130,7 +130,7 @@ export function PuzzlePage({ username }: PuzzlePageProps) {
 
   function handleSolved(id: number) {
     setPuzzles((prev) => prev.map((p) => (p.id === id ? { ...p, solved: true } : p)));
-    markPuzzleSolved(trimmedUsername, id).catch(() => {});
+    markPuzzleSolved(id).catch(() => {});
   }
 
   const puzzle = puzzles[index] ?? null;

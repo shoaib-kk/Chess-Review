@@ -2,16 +2,22 @@ from __future__ import annotations
 
 import logging
 import sys
-from copy import deepcopy
 from functools import lru_cache
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 
+from .auth import current_device
 from .db import SessionLocal, wait_for_db
 from .repositories.games import save_reviewed_game
-from .schemas import AnalyzeRequest, ChessComAnalyzeRequest, ChessComGameResponse, GameSummaryResponse, HealthResponse
+from .schemas import (
+    AnalyzeRequest,
+    ChessComAnalyzeRequest,
+    ChessComGameResponse,
+    GameSummaryResponse,
+    HealthResponse,
+)
 from .serializers import serialize_game_summary
 from .services.chesscom_client import ChessComClientError, get_recent_games
 from .services.opening_repertoire import get_opening_repertoire
@@ -19,6 +25,9 @@ from .services.player_insights import get_player_insights
 from .services.rate_limit import analyze_rate_limiter, lookup_rate_limiter
 from .routers.puzzles import router as puzzles_router
 from .routers.play import router as play_router
+from .routers.drills import router as drills_router
+from .routers.daily import router as daily_router
+from .routers.training import router as training_router
 
 logger = logging.getLogger(__name__)
 
@@ -31,10 +40,15 @@ try:
 except ModuleNotFoundError:
     from game_analyzer import analyze_pgn
 
+from stockfish_engine import EngineUnavailableError
+
 
 app = FastAPI(title="Chessspy API", version="1.0.0")
 app.include_router(puzzles_router)
 app.include_router(play_router)
+app.include_router(drills_router)
+app.include_router(daily_router)
+app.include_router(training_router)
 
 
 @app.on_event("startup")
@@ -57,8 +71,10 @@ app.add_middleware(
         # isn't normally exercised; listed for direct API access / safety).
         "http://170.64.177.231:8080",
     ],
-    # Covers Vercel preview deployments (e.g. chess-review-git-<branch>-<user>.vercel.app).
-    allow_origin_regex=r"https://chess-review.*\.vercel\.app",
+    # Covers Vercel preview deployments (e.g. chess-review-git-<branch>-<user>.vercel.app)
+    # while forbidding extra dotted segments so a host like chess-review.evil.com
+    # or chess-review-x.attacker.vercel.app can't match.
+    allow_origin_regex=r"https://chess-review(-[a-z0-9-]+)?\.vercel\.app",
     # No cookies/auth are used, so credentialed requests aren't needed.
     allow_credentials=False,
     allow_methods=["*"],
@@ -77,11 +93,17 @@ def root_health() -> dict[str, str]:
 
 
 @app.post("/analyze", response_model=GameSummaryResponse, dependencies=[Depends(analyze_rate_limiter)])
-def analyze(request: AnalyzeRequest) -> dict:
+def analyze(request: AnalyzeRequest, device: str = Depends(current_device)) -> dict:
+    # Pasted PGN: no Chess.com identity, so no color detection. Owned by device.
     try:
-        return _run_cached_analysis(request.pgn, request.depth, request.mode, "")
-    except Exception as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return _run_analysis(request.pgn, request.depth, request.mode, owner_id=device, player_username="")
+    except EngineUnavailableError:
+        # Engine missing / crashed / timed out — not the user's PGN. Tell them to retry.
+        logger.exception("Analysis engine unavailable")
+        raise HTTPException(status_code=503, detail="Analysis engine temporarily unavailable. Please try again shortly.")
+    except Exception:
+        logger.exception("Analysis failed")
+        raise HTTPException(status_code=400, detail="Could not analyze this game. Check the PGN and try again.")
 
 
 @app.get("/chesscom/{username}/games", response_model=list[ChessComGameResponse], dependencies=[Depends(lookup_rate_limiter)])
@@ -129,28 +151,42 @@ def opening_repertoire(
 
 
 @app.post("/chesscom/analyze", response_model=GameSummaryResponse, dependencies=[Depends(analyze_rate_limiter)])
-def chesscom_analyze(request: ChessComAnalyzeRequest) -> dict:
+def chesscom_analyze(request: ChessComAnalyzeRequest, device: str = Depends(current_device)) -> dict:
+    # The game is owned by the device; request.username is the Chess.com player
+    # used for color/accuracy detection only.
     try:
-        return _run_cached_analysis(request.pgn, request.depth, request.mode, request.username.strip())
-    except Exception as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-
-def _run_cached_analysis(pgn: str, depth: int, mode: str, username: str) -> dict:
-    return deepcopy(_cached_analysis_result(pgn, depth, mode, username))
+        return _run_analysis(
+            request.pgn, request.depth, request.mode, owner_id=device, player_username=request.username.strip()
+        )
+    except EngineUnavailableError:
+        logger.exception("Analysis engine unavailable")
+        raise HTTPException(status_code=503, detail="Analysis engine temporarily unavailable. Please try again shortly.")
+    except Exception:
+        logger.exception("Chess.com analysis failed")
+        raise HTTPException(status_code=400, detail="Could not analyze this game. Check the PGN and try again.")
 
 
 @lru_cache(maxsize=32)
-def _cached_analysis_result(pgn: str, depth: int, mode: str, username: str) -> dict:
-    summary = analyze_pgn(pgn_text=pgn, depth=depth, mode=mode)
-    serialized = serialize_game_summary(summary, username=username or None)
-    # Persist every reviewed game (idempotent dedup by PGN hash). Runs once per
-    # unique input thanks to the lru_cache; never let a DB hiccup break review.
+def _cached_analysis(pgn: str, depth: int, mode: str):
+    """Cache the expensive Stockfish pass, keyed only by the inputs that affect
+    it. Serialization (which depends on the player) and per-device persistence
+    are done per request below, so the same game isn't re-analysed per device."""
+    return analyze_pgn(pgn_text=pgn, depth=depth, mode=mode)
+
+
+def _run_analysis(pgn: str, depth: int, mode: str, *, owner_id: str, player_username: str) -> dict:
+    summary = _cached_analysis(pgn, depth, mode)
+    # serialize_game_summary builds a fresh dict and never mutates the cached
+    # summary, so no defensive copy is needed.
+    serialized = serialize_game_summary(summary, username=player_username or None)
+    # Persist every reviewed game, scoped to the device (idempotent dedup on
+    # owner_id + url/PGN hash). Best-effort: never let a DB hiccup break review.
     try:
         with SessionLocal() as session:
             save_reviewed_game(
                 session,
-                username=username or None,
+                owner_id=owner_id,
+                username=player_username or None,
                 pgn=pgn,
                 summary=summary,
                 analysis_json=serialized,

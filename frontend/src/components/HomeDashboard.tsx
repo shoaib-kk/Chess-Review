@@ -6,6 +6,7 @@ import {
   BookOpen,
   ChevronRight,
   Download,
+  Dumbbell,
   FileText,
   Flame,
   Gauge,
@@ -17,8 +18,24 @@ import {
   Trophy,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { fetchChessComGames, fetchPlayerInsights, fetchPuzzles } from "../api/client";
-import type { ChessComGame, GameSummary, OpeningInsight, PlayerInsights, PuzzleList } from "../types";
+import {
+  fetchChessComGames,
+  fetchInbox,
+  fetchPlayerInsights,
+  fetchProgress,
+  fetchPuzzles,
+  refreshInbox,
+} from "../api/client";
+import type {
+  ChessComGame,
+  GameSummary,
+  InboxData,
+  InboxGame,
+  OpeningInsight,
+  PlayerInsights,
+  ProgressSummary,
+  PuzzleList,
+} from "../types";
 import { SAMPLE_GAME_LABEL } from "../data/sampleGame";
 import { ApiStatusIndicator } from "./ApiStatusIndicator";
 import { Button } from "./ui/Button";
@@ -42,6 +59,9 @@ interface HomeDashboardProps {
   onOpenInsights: () => void;
   onOpenRepertoire: () => void;
   onOpenPuzzles: () => void;
+  onOpenTraining: () => void;
+  onOpenDaily: () => void;
+  onReviewInboxGame: (game: InboxGame) => void;
   sampleLoading: boolean;
   activeReview: GameSummary | null;
   onResumeReview: () => void;
@@ -93,7 +113,7 @@ export function HomeDashboard(props: HomeDashboardProps) {
     setLoading(true);
     Promise.allSettled([
       fetchPlayerInsights(name, { limit: 200 }),
-      fetchPuzzles(name, { limit: 1 }),
+      fetchPuzzles({ limit: 1 }),
       fetchChessComGames(name, 12),
     ]).then(([insightsRes, puzzlesRes, gamesRes]) => {
       if (cancelled) return;
@@ -178,6 +198,9 @@ function DashboardBody({
   onOpenInsights,
   onOpenRepertoire,
   onOpenPuzzles,
+  onOpenTraining,
+  onOpenDaily,
+  onReviewInboxGame,
   onImportGame,
   onPastePgn,
   onReviewGame,
@@ -223,6 +246,13 @@ function DashboardBody({
 
   return (
     <div className="space-y-7">
+      <ProgressBanner
+        username={username}
+        onOpenTraining={onOpenTraining}
+        onOpenDaily={onOpenDaily}
+        onReviewInboxGame={onReviewInboxGame}
+      />
+
       {/* Hero row: focus / resume + accuracy ring */}
       <div className="grid gap-4 lg:grid-cols-12">
         <FocusCard
@@ -296,6 +326,112 @@ function DashboardBody({
         <CoachNotes className="lg:col-span-4" insights={insights} onPastePgn={onPastePgn} />
       </div>
     </div>
+  );
+}
+
+// ── progress + inbox banner ─────────────────────────────────────────────────
+function ProgressBanner({
+  username,
+  onOpenTraining,
+  onOpenDaily,
+  onReviewInboxGame,
+}: {
+  username: string;
+  onOpenTraining: () => void;
+  onOpenDaily: () => void;
+  onReviewInboxGame: (game: InboxGame) => void;
+}) {
+  const [progress, setProgress] = useState<ProgressSummary | null>(null);
+  const [inbox, setInbox] = useState<InboxData | null>(null);
+
+  useEffect(() => {
+    const name = username.trim();
+    if (!name) return;
+    let cancelled = false;
+    // Kick off a background poll for new games, then read the current inbox/progress.
+    refreshInbox(name).catch(() => {});
+    Promise.allSettled([fetchProgress(name), fetchInbox()]).then(([p, i]) => {
+      if (cancelled) return;
+      if (p.status === "fulfilled") setProgress(p.value);
+      if (i.status === "fulfilled") setInbox(i.value);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [username]);
+
+  const streak = progress?.streak?.current_streak ?? 0;
+  const topDelta = progress?.deltas?.[0] ?? null;
+  const training = progress?.training ?? null;
+  const blunderDelta = progress?.deltas?.find((d) => d.label === "Blunder rate") ?? null;
+  const readyCount = inbox?.count ?? 0;
+  const firstReady = inbox?.games?.[0] ?? null;
+
+  if (!progress && !inbox) return null;
+
+  return (
+    <Surface variant="raised" className="flex flex-wrap items-center justify-between gap-4 p-5">
+      <div className="flex flex-wrap items-center gap-5">
+        <div className="flex items-center gap-2.5">
+          <span className="grid h-10 w-10 place-items-center rounded-xl bg-app-accentSoft text-app-accent">
+            <Flame className="h-5 w-5" />
+          </span>
+          <div>
+            <div className="nums text-xl font-semibold text-app-text">{streak}-day streak</div>
+            <div className="text-xs text-app-subtle">
+              {progress?.streak?.longest_streak ? `Best: ${progress.streak.longest_streak} days` : "Start one today"}
+            </div>
+          </div>
+        </div>
+        {topDelta && (
+          <div className="border-l border-app-border pl-5">
+            <div
+              className={`flex items-center gap-1.5 text-sm font-medium ${
+                topDelta.improved ? "text-app-good" : "text-app-mistake"
+              }`}
+            >
+              <TrendingUp className="h-4 w-4" />
+              {topDelta.text}
+            </div>
+            <div className="text-xs text-app-subtle">Your number that moved this month</div>
+          </div>
+        )}
+        {training?.active && training.headline && (
+          <div className="border-l border-app-border pl-5">
+            <div className="flex items-center gap-1.5 text-sm font-medium text-app-good">
+              <Dumbbell className="h-4 w-4" />
+              {training.headline}
+            </div>
+            <div className="text-xs text-app-subtle">
+              {blunderDelta?.improved
+                ? `In real games, ${blunderDelta.text.toLowerCase()}`
+                : "Keep drilling to move your real-game numbers"}
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        {readyCount > 0 && (
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => firstReady && onReviewInboxGame(firstReady)}
+          >
+            <Download className="h-4 w-4" />
+            {readyCount} game{readyCount !== 1 ? "s" : ""} ready to review
+          </Button>
+        )}
+        <Button variant="ghost" size="sm" onClick={onOpenDaily}>
+          <Flame className="h-4 w-4" />
+          Daily
+        </Button>
+        <Button variant="primary" size="sm" onClick={onOpenTraining}>
+          <Target className="h-4 w-4" />
+          Training plan
+        </Button>
+      </div>
+    </Surface>
   );
 }
 

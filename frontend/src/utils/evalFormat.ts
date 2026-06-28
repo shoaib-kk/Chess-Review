@@ -17,3 +17,16 @@ export function formatEval(cp: number | null): string {
   const pawns = cp / 100;
   return `${pawns > 0 ? "+" : ""}${pawns.toFixed(2)}`;
 }
+
+// Logistic centipawns -> win chance, matching the backend (accuracy.py /
+// models.cp_to_win_chance) so the graph and the accuracy numbers agree.
+const WIN_CHANCE_K = 0.00368208;
+const MAX_CP_FOR_WIN_CHANCE = 4000;
+
+/** Centipawns (POV of whoever you want the chance for) -> win chance 0-100. */
+export function cpToWinChance(cp: number | null): number {
+  if (cp === null) return 50;
+  const bounded = Math.max(-MAX_CP_FOR_WIN_CHANCE, Math.min(MAX_CP_FOR_WIN_CHANCE, cp));
+  const chance = 50 + 50 * (2 / (1 + Math.exp(-WIN_CHANCE_K * bounded)) - 1);
+  return Math.max(0, Math.min(100, chance));
+}

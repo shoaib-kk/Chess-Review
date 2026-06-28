@@ -113,6 +113,10 @@ def serialize_game_summary(summary, username: str | None = None) -> dict:
                 "classification": classification,
                 "pv": move.pv,
                 "fen_before": move.fen_before,
+                "top_moves": [
+                    {"move": cand["move"], "eval": cand["eval"]}
+                    for cand in getattr(move, "top_moves", [])
+                ],
                 **derived,
             }
         )

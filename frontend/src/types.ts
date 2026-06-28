@@ -1,6 +1,7 @@
 export type MoveClassification =
   | "Book"
   | "Brilliant"
+  | "Great"
   | "Best"
   | "Excellent"
   | "Good"
@@ -8,6 +9,21 @@ export type MoveClassification =
   | "Mistake"
   | "Miss"
   | "Blunder";
+
+export interface CandidateMove {
+  move: string;
+  eval: number | null;
+}
+
+/**
+ * An interactive exploration line on the review board: SAN moves played out from
+ * a base position (either the current board, when the user drags a piece, or the
+ * position before a move, when stepping the engine's best line / a candidate).
+ */
+export interface AnalysisLine {
+  baseFen: string;
+  moves: string[];
+}
 export type AnalysisMode = "fast" | "normal" | "deep";
 export type TimeClassFilter = "rapid" | "blitz" | "bullet" | "";
 
@@ -51,7 +67,6 @@ export interface PuzzleFilters {
 }
 
 export interface PuzzleList {
-  username: string;
   puzzles: Puzzle[];
   total_puzzles: number;
   analyzed_games: number;
@@ -75,6 +90,7 @@ export interface MoveAnalysis {
   fen_after: string;
   played_move_uci: string | null;
   best_move_uci: string | null;
+  top_moves: CandidateMove[];
 }
 
 export interface GameSummary {
@@ -334,4 +350,131 @@ export interface InsightWindow {
   avg_accuracy: number | null;
   avg_cp_loss: number | null;
   blunders: number;
+}
+
+// ── training layer (drills / daily / progress / inbox) ──────────────────────
+
+export type DrillObjective = "convert" | "hold" | "defend";
+export type Verdict = "pass" | "fail";
+
+export interface TrainingCategory {
+  name: string;
+  weakness_source: string;
+  phase: string | null;
+  drills_total: number;
+  drills_passed: number;
+  mastery_pct: number;
+  mastered: boolean;
+  next_drill_id: number | null;
+}
+
+export interface TrainingPlan {
+  username: string;
+  max_user_moves: number;
+  categories: TrainingCategory[];
+}
+
+export interface Drill {
+  id: number;
+  category: string;
+  fen: string;
+  user_color: "White" | "Black";
+  start_eval_cp: number;
+  objective: DrillObjective;
+  phase: string | null;
+  source_game_id: number;
+  max_user_moves: number;
+}
+
+export interface DrillVerdict {
+  drill_id: number;
+  objective: DrillObjective;
+  verdict: Verdict;
+  start_eval: number;
+  final_eval: number | null;
+  swing: number | null;
+  reason: string;
+}
+
+export interface Streak {
+  current_streak: number;
+  longest_streak: number;
+  last_completed_date: string | null;
+}
+
+export interface SrsMeta {
+  interval_stage: number;
+  due_date: string;
+  last_result: string | null;
+}
+
+export type SrsPuzzle = Puzzle & { srs?: SrsMeta };
+
+export interface DailyData {
+  date: string;
+  daily_set: Puzzle[];
+  due_cards: SrsPuzzle[];
+  streak: Streak;
+}
+
+export interface DailyResult {
+  scheduled: { interval_stage: number; due_date: string; last_result: string };
+  streak: Streak;
+}
+
+export interface ProgressDelta {
+  label: string;
+  direction: "up" | "down" | "flat";
+  improved: boolean;
+  change: number;
+  unit: string;
+  text: string;
+}
+
+export interface ProgressWindow {
+  games: number;
+  avg_accuracy: number | null;
+  blunders: number;
+  blunder_rate: number | null;
+}
+
+export interface TrainingActivityWindow {
+  attempts: number;
+  passed: number;
+}
+
+export interface TrainingActivity {
+  this_week: TrainingActivityWindow;
+  last_week: TrainingActivityWindow;
+  passed_delta: number;
+  top_phase: string | null;
+  top_phase_passed: number;
+  headline: string | null;
+  active: boolean;
+}
+
+export interface ProgressSummary {
+  username: string;
+  current_window: ProgressWindow;
+  previous_window: ProgressWindow;
+  deltas: ProgressDelta[];
+  has_comparison: boolean;
+  streak: Streak;
+  training?: TrainingActivity;
+}
+
+export interface InboxGame {
+  id: number;
+  game_url: string | null;
+  game_date: string | null;
+  white_player: string;
+  black_player: string;
+  result: string | null;
+  opening: string | null;
+  pgn: string;
+}
+
+export interface InboxData {
+  games: InboxGame[];
+  count: number;
 }

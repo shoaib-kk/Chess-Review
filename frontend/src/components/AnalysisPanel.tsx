@@ -1,6 +1,6 @@
-import { Chess } from "chess.js";
+import { Chess, type Square } from "chess.js";
 import { useEffect, useState } from "react";
-import type { GameSummary, MoveAnalysis, MoveClassification } from "../types";
+import type { AnalysisLine, GameSummary, MoveAnalysis, MoveClassification } from "../types";
 import { classificationMeta } from "../utils/classification";
 import { formatEval, isMateScore, mateInMoves } from "../utils/evalFormat";
 import { ClassificationBadge } from "./ui/Badge";
@@ -10,6 +10,8 @@ import { Card } from "./ui/Card";
 interface AnalysisPanelProps {
   summary: GameSummary;
   currentIndex: number;
+  analysisLine?: AnalysisLine | null;
+  onPlayLine?: (line: AnalysisLine | null) => void;
   embedded?: boolean;
 }
 
@@ -26,7 +28,9 @@ const PIECE_NAME: Record<string, string> = {
 function coachHeadline(classification: MoveClassification): string {
   switch (classification) {
     case "Brilliant":
-      return "Brilliant — a bold move that works.";
+      return "Brilliant — a bold sacrifice that works.";
+    case "Great":
+      return "Great move — the critical move when everything else was much worse.";
     case "Best":
       return "Best move — exactly what the engine plays.";
     case "Excellent":
@@ -78,6 +82,79 @@ function findHangingCapture(fenAfter: string): { square: string; piece: string; 
   return best;
 }
 
+/**
+ * Detect a fork / double attack the played move walks into: an opponent move
+ * after which one of their pieces hits two or more of your valuable pieces (or
+ * your king plus a piece), winning material. Uses chess.js `attackers`; returns
+ * null on engines/positions where nothing qualifies. Conservative — it only
+ * fires when at least one target is higher-value than the attacker, undefended,
+ * or the king, so it doesn't cry "fork" at every contact.
+ */
+function findFork(fenAfter: string): { forker: string; square: string; targets: string[] } | null {
+  let game: Chess;
+  try {
+    game = new Chess(fenAfter);
+  } catch {
+    return null;
+  }
+  const attackersOf = (game as unknown as { attackers?: unknown }).attackers;
+  if (typeof attackersOf !== "function") return null;
+
+  const them = game.turn();
+  const us = them === "w" ? "b" : "w";
+  let best: { forker: string; square: string; targets: string[]; score: number } | null = null;
+
+  for (const mv of game.moves({ verbose: true })) {
+    game.move(mv);
+    const forker = game.get(mv.to as Square);
+    const forkerVal = forker ? PIECE_VALUE[forker.type] : 0;
+    const targets: { name: string; val: number; defended: boolean }[] = [];
+
+    for (const row of game.board()) {
+      for (const cell of row) {
+        if (!cell || cell.color !== us) continue;
+        const isKing = cell.type === "k";
+        const baseVal = PIECE_VALUE[cell.type] ?? 0;
+        if (!isKing && baseVal < 3) continue;
+        const atk = (game.attackers(cell.square, them) ?? []) as string[];
+        if (!atk.includes(mv.to)) continue;
+        const def = (game.attackers(cell.square, us) ?? []) as string[];
+        targets.push({ name: PIECE_NAME[cell.type], val: isKing ? 100 : baseVal, defended: def.length > 0 });
+      }
+    }
+    game.undo();
+
+    if (targets.length < 2) continue;
+    const winsMaterial = targets.some((t) => t.val === 100 || t.val > forkerVal || !t.defended);
+    if (!winsMaterial) continue;
+
+    const score = targets.reduce((sum, t) => sum + t.val, 0);
+    if (!best || score > best.score) {
+      best = { forker: PIECE_NAME[forker?.type ?? "p"], square: mv.to, targets: targets.map((t) => t.name), score };
+    }
+  }
+
+  return best ? { forker: best.forker, square: best.square, targets: best.targets } : null;
+}
+
+function forkTargetPhrase(targets: string[]): string {
+  const unique = Array.from(new Set(targets));
+  if (unique.length === 1) return `two of your ${unique[0]}s`;
+  if (unique.length === 2) return `your ${unique[0]} and ${unique[1]}`;
+  return `your ${unique.slice(0, -1).join(", ")}, and ${unique[unique.length - 1]}`;
+}
+
+/** Plain-language read of where a position leaves the mover (mover-POV cp). */
+function standing(cpMover: number | null): string {
+  if (cpMover === null) return "";
+  if (isMateScore(cpMover)) return cpMover > 0 ? " with a forced mate" : " and gets mated";
+  if (cpMover <= -300) return ", leaving you losing";
+  if (cpMover <= -100) return ", leaving you clearly worse";
+  if (cpMover < -30) return ", giving your opponent the edge";
+  if (cpMover <= 30) return ", letting the advantage slip to roughly equal";
+  return "";
+}
+
 /** A concrete reason an error move was bad, or null to fall back to generic copy. */
 function explainMove(move: MoveAnalysis): string | null {
   if (!classificationMeta(move.classification).isError) return null;
@@ -103,10 +180,25 @@ function explainMove(move: MoveAnalysis): string | null {
       : `This leaves your ${name} on ${hang.square} hanging.`;
   }
 
+  const fork = findFork(move.fen_after);
+  if (fork) {
+    const base = `This allows a ${fork.forker} fork on ${fork.square}, hitting ${forkTargetPhrase(fork.targets)}`;
+    return move.best_move ? `${base}; ${move.best_move} avoided it.` : `${base}.`;
+  }
+
+  // Concrete fallback: name the better move and quantify what was given up,
+  // rather than the generic "this changed the evaluation".
+  if (move.best_move && move.best_move !== move.move_played && move.cp_loss !== null) {
+    const pawns = move.cp_loss / 100;
+    if (pawns >= 0.3) {
+      return `${move.best_move} was stronger — ${move.move_played} gives up about ${pawns.toFixed(1)} pawns${standing(afterMover)}.`;
+    }
+  }
+
   return null;
 }
 
-export function AnalysisPanel({ summary, currentIndex, embedded = false }: AnalysisPanelProps) {
+export function AnalysisPanel({ summary, currentIndex, analysisLine, onPlayLine, embedded = false }: AnalysisPanelProps) {
   const [showBestLine, setShowBestLine] = useState(false);
   const move = currentIndex >= 0 ? summary.move_analyses[currentIndex] : undefined;
 
@@ -166,13 +258,15 @@ export function AnalysisPanel({ summary, currentIndex, embedded = false }: Analy
               />
             </div>
 
+            <TopMoves move={move} analysisLine={analysisLine ?? null} onPlayLine={onPlayLine} />
+
             <div className="mt-5">
               <Button variant="secondary" size="sm" onClick={() => setShowBestLine((value) => !value)}>
                 {showBestLine ? "Hide best line" : "Show best line"}
               </Button>
             </div>
 
-            {showBestLine && <BestLine move={move} />}
+            {showBestLine && <BestLine move={move} analysisLine={analysisLine ?? null} onPlayLine={onPlayLine} />}
           </div>
         )}
 
@@ -202,25 +296,114 @@ function EvalStat({ label, value }: { label: string; value: string }) {
   );
 }
 
-function BestLine({ move }: { move: MoveAnalysis }) {
-  const line = move.pv.length ? move.pv : move.best_move ? [move.best_move] : [];
-  const bestMove = move.best_move ?? line[0] ?? "-";
-  const followUp = line[0] === bestMove ? line.slice(1) : line;
+/** Eval (mover POV centipawns) styled by who it favours. */
+function CandidateEval({ cp }: { cp: number | null }) {
+  const tone = cp === null ? "text-app-muted" : cp >= 30 ? "text-app-good" : cp <= -30 ? "text-app-blunder" : "text-app-muted";
+  return <span className={`font-mono text-xs font-semibold ${tone}`}>{formatEval(cp)}</span>;
+}
+
+/** The engine's top candidate moves with evals — click one to see it on the board. */
+function TopMoves({
+  move,
+  analysisLine,
+  onPlayLine,
+}: {
+  move: MoveAnalysis;
+  analysisLine: AnalysisLine | null;
+  onPlayLine?: (line: AnalysisLine | null) => void;
+}) {
+  const candidates = move.top_moves ?? [];
+  if (candidates.length === 0) return null;
+
+  const activeFirst =
+    analysisLine && analysisLine.baseFen === move.fen_before && analysisLine.moves.length >= 1
+      ? analysisLine.moves[0]
+      : null;
 
   return (
     <div className="mt-5 border-t border-app-border pt-4">
-      <div className="grid gap-4 sm:grid-cols-[160px_1fr]">
-        <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-app-faint">Best move</p>
-          <p className="mt-1 font-mono text-lg font-semibold text-app-good">{bestMove}</p>
-        </div>
-        <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-app-faint">Follow-up line</p>
-          <p className="mt-1 min-h-7 font-mono text-sm leading-6 text-app-text">
-            {followUp.length ? followUp.join(" ") : "No follow-up returned"}
-          </p>
-        </div>
+      <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-app-faint">Top engine moves</p>
+      <div className="mt-2 flex flex-wrap gap-2">
+        {candidates.map((cand, i) => {
+          const active = activeFirst === cand.move;
+          return (
+            <button
+              key={`${cand.move}-${i}`}
+              type="button"
+              disabled={!onPlayLine}
+              onClick={() => onPlayLine?.({ baseFen: move.fen_before, moves: [cand.move] })}
+              className={`flex items-center gap-2 rounded-lg border px-2.5 py-1.5 transition ${
+                active ? "border-app-accent bg-app-accent/10" : "border-app-border bg-app-panelSecondary hover:border-app-accent/50"
+              } ${onPlayLine ? "cursor-pointer" : "cursor-default"}`}
+            >
+              <span className="font-mono text-sm font-semibold text-app-text">{cand.move}</span>
+              <CandidateEval cp={cand.eval} />
+            </button>
+          );
+        })}
       </div>
+      {onPlayLine && <p className="mt-1.5 text-[11px] text-app-faint">Click a move to play it on the board.</p>}
+    </div>
+  );
+}
+
+function BestLine({
+  move,
+  analysisLine,
+  onPlayLine,
+}: {
+  move: MoveAnalysis;
+  analysisLine: AnalysisLine | null;
+  onPlayLine?: (line: AnalysisLine | null) => void;
+}) {
+  const line = move.pv.length ? move.pv : move.best_move ? [move.best_move] : [];
+  const activeDepth =
+    analysisLine && analysisLine.baseFen === move.fen_before ? analysisLine.moves.length : 0;
+
+  if (line.length === 0) {
+    return (
+      <div className="mt-5 border-t border-app-border pt-4">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-app-faint">Best line</p>
+        <p className="mt-1 font-mono text-sm text-app-muted">No line returned</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-5 border-t border-app-border pt-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-app-faint">Best line</p>
+        {onPlayLine && (
+          <button
+            type="button"
+            onClick={() => onPlayLine({ baseFen: move.fen_before, moves: line })}
+            className="font-mono text-[11px] font-semibold text-app-accent hover:underline"
+          >
+            Play whole line →
+          </button>
+        )}
+      </div>
+      <div className="mt-2 flex flex-wrap gap-1.5">
+        {line.map((san, i) => {
+          const active = onPlayLine ? i < activeDepth : false;
+          return (
+            <button
+              key={`${san}-${i}`}
+              type="button"
+              disabled={!onPlayLine}
+              onClick={() => onPlayLine?.({ baseFen: move.fen_before, moves: line.slice(0, i + 1) })}
+              className={`rounded-md px-1.5 py-0.5 font-mono text-sm transition ${
+                active ? "bg-app-accent/20 text-app-text" : "text-app-text hover:bg-app-panelSecondary"
+              } ${i === 0 ? "font-semibold text-app-good" : ""} ${onPlayLine ? "cursor-pointer" : "cursor-default"}`}
+            >
+              {san}
+            </button>
+          );
+        })}
+      </div>
+      {onPlayLine && (
+        <p className="mt-1.5 text-[11px] text-app-faint">Click any move to step the line out on the board.</p>
+      )}
     </div>
   );
 }

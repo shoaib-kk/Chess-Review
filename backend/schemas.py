@@ -15,6 +15,17 @@ class AnalyzeRequest(BaseModel):
     mode: Literal["fast", "normal", "deep"] = "normal"
 
 
+class PuzzleAnalyzeRequest(BaseModel):
+    # The Chess.com username whose public games should be mined for puzzles. The
+    # resulting puzzles are owned by the caller's device (X-Device-Id), not this.
+    username: str = Field(..., min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_-]{1,64}$")
+
+
+class CandidateMoveResponse(BaseModel):
+    move: str
+    eval: Optional[float] = None
+
+
 class MoveAnalysisResponse(BaseModel):
     move_number: int
     color: str
@@ -31,6 +42,7 @@ class MoveAnalysisResponse(BaseModel):
     fen_after: str
     played_move_uci: Optional[str]
     best_move_uci: Optional[str]
+    top_moves: list[CandidateMoveResponse] = []
 
 
 class GameSummaryResponse(BaseModel):
@@ -87,7 +99,7 @@ class ChessComGameResponse(BaseModel):
 
 
 class ChessComAnalyzeRequest(BaseModel):
-    username: str = Field(..., min_length=1, max_length=64)
+    username: str = Field(..., min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_-]{1,64}$")
     pgn: str = Field(..., min_length=1, max_length=MAX_PGN_CHARS)
     depth: int = Field(default=16, ge=1, le=24)
     mode: Literal["fast", "normal", "deep"] = "normal"
@@ -107,3 +119,37 @@ class EngineMoveResponse(BaseModel):
     is_game_over: bool
     is_check: bool
     eval_cp: Optional[int] = None  # centipawns from the side-to-move POV, before the move
+
+
+# ── training layer (drills / daily / progress / inbox) ──────────────────────
+
+class TrainingPlanRequest(BaseModel):
+    username: str = Field(..., min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_-]{1,64}$")
+
+
+class DrillAttemptRequest(BaseModel):
+    # The final position of the play-out (after the user's last move / the engine's
+    # reply). The verdict is computed from a fresh engine eval of this FEN.
+    final_fen: str = Field(..., min_length=1)
+    # Optional SAN move list of the play-out, for the record (not required to grade).
+    moves: list[str] = Field(default_factory=list, max_length=64)
+    depth: int = Field(default=14, ge=1, le=20)
+
+
+class DrillVerdictResponse(BaseModel):
+    drill_id: int
+    objective: str
+    verdict: str  # "pass" | "fail"
+    start_eval: int
+    final_eval: Optional[int]
+    swing: Optional[int]
+    reason: str
+
+
+class DailyResultRequest(BaseModel):
+    result: Literal["pass", "fail"]
+    username: Optional[str] = Field(default=None, max_length=64)
+
+
+class InboxImportRequest(BaseModel):
+    username: str = Field(..., min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_-]{1,64}$")
