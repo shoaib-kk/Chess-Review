@@ -7,7 +7,7 @@ import { Card, CardHeader } from "../ui/Card";
 import { Fingerprint } from "./Fingerprint";
 import { LichessTraps } from "./LichessTraps";
 import { Refutations } from "./Refutations";
-import type { OpenLine } from "./shared";
+import type { OpenLine, Side } from "./shared";
 
 export interface ScoutFilters {
   limit: number;
@@ -31,12 +31,16 @@ interface Props {
   onOpen: OpenLine;
   /** Lets the page (e.g. the prep sheet) use finished results. */
   onResult?: (result: ScoutDeepResult | null) => void;
+  /** Tells the page whether a job is running (for hints elsewhere). */
+  onRunningChange?: (running: boolean) => void;
+  /** The OPPONENT's colour the user chose to prepare for; lines for the other colour are hidden. */
+  focusColor?: Side;
 }
 
 /**
  * Mount this with a `key` of username + filters so a change of opponent or filters resets the poll loop.
  */
-export function DeepAnalysisPanel({ username, filters, onOpen, onResult }: Props) {
+export function DeepAnalysisPanel({ username, filters, onOpen, onResult, onRunningChange, focusColor }: Props) {
   const [status, setStatus] = useState<ScoutDeepStatus | null>(null);
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -70,6 +74,11 @@ export function DeepAnalysisPanel({ username, filters, onOpen, onResult }: Props
   }, [username, filters.limit, filters.time_class, filters.rated_only]);
 
   const running = status?.state === "running";
+  const onRunningRef = useRef(onRunningChange);
+  onRunningRef.current = onRunningChange;
+  useEffect(() => {
+    onRunningRef.current?.(running);
+  }, [running]);
 
   // Poll while running.
   useEffect(() => {
@@ -126,8 +135,8 @@ export function DeepAnalysisPanel({ username, filters, onOpen, onResult }: Props
           </Button>
         }
       >
-        Runs Stockfish on their habitual opening moves, fully analyses about 40 of their recent games, and checks the Lichess
-        database for traps at their rating. It takes a few minutes; you can keep browsing while it works.
+        Stockfish checks the moves they always play, replays about 40 of their recent games to see how they go wrong, and the
+        Lichess database looks for traps at their rating. Takes 3–5 minutes; keep browsing the other tabs while it works.
       </CardHeader>
 
       {error && (
@@ -176,9 +185,26 @@ export function DeepAnalysisPanel({ username, filters, onOpen, onResult }: Props
 
       {result && (
         <div className="grid gap-8">
-          <Refutations items={result.refutations} onOpen={onOpen} />
+          {focusColor && (
+            <p className="-mb-4 text-xs text-app-faint">
+              Showing opening lines for when you have {focusColor === "white" ? "Black" : "White"}. Switch colour at the top to see
+              the others.
+            </p>
+          )}
+          <Refutations
+            items={focusColor ? result.refutations.filter((r) => r.opponent_color === focusColor) : result.refutations}
+            onOpen={onOpen}
+          />
           <Fingerprint data={result.fingerprint} />
-          <LichessTraps traps={result.lichess_traps} error={result.lichess_error} onOpen={onOpen} />
+          <LichessTraps
+            traps={
+              result.lichess_traps && focusColor
+                ? result.lichess_traps.filter((t) => t.opponent_color === focusColor)
+                : result.lichess_traps
+            }
+            error={result.lichess_error}
+            onOpen={onOpen}
+          />
           <p className="text-[11px] text-app-faint">Generated {new Date(result.generated_at).toLocaleString()}</p>
         </div>
       )}

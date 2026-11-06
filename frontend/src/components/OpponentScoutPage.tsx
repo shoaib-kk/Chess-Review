@@ -44,6 +44,10 @@ import { HabitsPanel } from "./scout/HabitsPanel";
 import { HeadToHead } from "./scout/HeadToHead";
 import { PrepSheet, PrepSheetButton } from "./scout/PrepSheet";
 import { FriendsCard, WatchButton, useWatchlist } from "./scout/Watchlist";
+import { Briefing } from "./scout/Briefing";
+import type { ScoutTab } from "./scout/Briefing";
+import { ColourPicker } from "./scout/ColourPicker";
+import { GLOSSARY, InfoTip } from "./scout/InfoTip";
 
 interface OpponentScoutPageProps {
   /** The signed-in Chess.com username, used for the matchup section. */
@@ -207,11 +211,17 @@ export function OpponentScoutPage({ myUsername }: OpponentScoutPageProps) {
   /** Filters the current report was actually generated with (the deep analysis must use the same ones). */
   const [reportFilters, setReportFilters] = useState<ScoutFilters | null>(null);
   const [deep, setDeep] = useState<ScoutDeepResult | null>(null);
+  const [deepRunning, setDeepRunning] = useState(false);
   const watch = useWatchlist();
 
-  const [side, setSide] = useState<Side>("black");
+  /** The USER's colour; the opponent has the other one. Everything below follows it. */
+  const [you, setYou] = useState<Side>("white");
+  const [tab, setTab] = useState<ScoutTab>("briefing");
   const [path, setPath] = useState<string[]>([]);
-  const explorerRef = useRef<HTMLDivElement | null>(null);
+  const tabsRef = useRef<HTMLDivElement | null>(null);
+  /** Bumped to request a scroll to the tab bar AFTER the newly selected tab has rendered. */
+  const [scrollTick, setScrollTick] = useState(0);
+  const opp: Side = you === "white" ? "black" : "white";
 
   const me = myUsername.trim();
   const sameAsMe = me && opponent.trim().toLowerCase() === me.toLowerCase();
@@ -238,8 +248,9 @@ export function OpponentScoutPage({ myUsername }: OpponentScoutPageProps) {
       setReportFilters({ limit, time_class: timeClass, rated_only: ratedOnly });
       setDeep(null);
       setPath([]);
-      // Start the explorer on the side you'll most likely need: their more-played colour.
-      setSide(result.profile.black.games >= result.profile.white.games ? "black" : "white");
+      setTab("briefing");
+      // Default to the colour you're most likely to face them with: the opposite of their more-played side.
+      setYou(result.profile.black.games >= result.profile.white.games ? "white" : "black");
     } catch (err) {
       setError(apiErrorMessage(err));
     } finally {
@@ -267,21 +278,47 @@ export function OpponentScoutPage({ myUsername }: OpponentScoutPageProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  function openLine(color: Side, linePath: string[]) {
-    setSide(color);
-    setPath(linePath);
-    explorerRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  function changeYou(next: Side) {
+    setYou(next);
+    setPath([]);
   }
+
+  function goTab(next: ScoutTab) {
+    setTab(next);
+    setScrollTick((t) => t + 1);
+  }
+
+  useEffect(() => {
+    if (scrollTick > 0) tabsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [scrollTick]);
+
+  /** Jump the explorer to a line. ``color`` is the OPPONENT's colour in that line. */
+  function openLine(color: Side, linePath: string[]) {
+    setYou(color === "white" ? "black" : "white");
+    setPath(linePath);
+    goTab("openings");
+  }
+
+  const optionsSummary = [
+    `${limit} games`,
+    ratedOnly ? "rated only" : null,
+    engine ? "engine check on" : "engine check off",
+    compare && me && !sameAsMe ? `comparing with ${me}` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
 
   return (
     <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] animate-fade-in gap-5">
       <Card>
-        <CardHeader title="Scout an opponent" eyebrow="Opening preparation">
-          Read an opponent's public Chess.com games: what they play, what they know deeply, and where they score below
-          their rating.
-        </CardHeader>
+        {!report && (
+          <CardHeader title="Scout an opponent" eyebrow="Prepare for your next game">
+            Type who you're playing next. You'll get a short game plan for your colour, then you can dig into their openings,
+            habits and mistakes.
+          </CardHeader>
+        )}
         <form
-          className="grid gap-3 lg:grid-cols-[1fr_120px_160px_auto] lg:items-center"
+          className="grid gap-3 sm:grid-cols-[1fr_170px_auto] sm:items-center"
           onSubmit={(event) => {
             event.preventDefault();
             void runScout();
@@ -297,20 +334,13 @@ export function OpponentScoutPage({ myUsername }: OpponentScoutPageProps) {
               aria-label="Opponent username"
             />
           </div>
-          <select className={input} value={limit} onChange={(event) => setLimit(Number(event.target.value))} aria-label="Games to read">
-            {[100, 200, 300, 500].map((n) => (
-              <option key={n} value={n}>
-                {n} games
-              </option>
-            ))}
-          </select>
           <select
             className={input}
             value={timeClass}
             onChange={(event) => setTimeClass(event.target.value as ScoutTimeClass)}
-            aria-label="Time control"
+            aria-label="Time control you'll play"
           >
-            <option value="">All time controls</option>
+            <option value="">Any time control</option>
             <option value="bullet">Bullet</option>
             <option value="blitz">Blitz</option>
             <option value="rapid">Rapid</option>
@@ -321,25 +351,41 @@ export function OpponentScoutPage({ myUsername }: OpponentScoutPageProps) {
             {loading ? "Scouting…" : "Scout"}
           </Button>
         </form>
-        <div className="mt-3 flex flex-wrap gap-2">
-          <Toggle checked={ratedOnly} onChange={setRatedOnly} label="Rated only" />
-          <Toggle
-            checked={engine}
-            onChange={setEngine}
-            label="Engine check"
-            hint="Stockfish scores where each game stands after move 12 (adds ~5–15s)"
-          />
-          <Toggle
-            checked={compare && !!me && !sameAsMe}
-            disabled={!me || !!sameAsMe}
-            onChange={setCompare}
-            label={me ? `Compare with ${me}` : "Compare with my games"}
-            hint={me ? "Cross their weak spots with the openings you actually play" : "Set your username on the dashboard first"}
-          />
-        </div>
+        <details className="group mt-3">
+          <summary className="flex cursor-pointer list-none items-center gap-1.5 text-xs text-app-muted hover:text-app-text">
+            <ChevronDown className="h-3.5 w-3.5 transition group-open:rotate-180" />
+            More options <span className="text-app-faint">({optionsSummary})</span>
+          </summary>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <select
+              className="h-9 rounded-lg border border-app-border bg-app-panelSecondary px-3 text-sm text-app-text outline-none"
+              value={limit}
+              onChange={(event) => setLimit(Number(event.target.value))}
+              aria-label="Games to read"
+            >
+              {[100, 200, 300, 500].map((n) => (
+                <option key={n} value={n}>
+                  Read {n} games
+                </option>
+              ))}
+            </select>
+            <Toggle checked={ratedOnly} onChange={setRatedOnly} label="Rated games only" />
+            <Toggle
+              checked={engine}
+              onChange={setEngine}
+              label="Engine check"
+              hint="Stockfish scores where each game stands after move 12 (adds ~5–15s)"
+            />
+            <Toggle
+              checked={compare && !!me && !sameAsMe}
+              disabled={!me || !!sameAsMe}
+              onChange={setCompare}
+              label={me ? `Compare with my games (${me})` : "Compare with my games"}
+              hint={me ? "Adds your head-to-head record and which of your openings suit this matchup" : "Set your username on the dashboard first"}
+            />
+          </div>
+        </details>
       </Card>
-
-      <FriendsCard watch={watch} onScout={scoutUser} />
 
       {error && (
         <div className="flex items-start gap-3 rounded-lg bg-app-blunder/10 px-4 py-3 text-sm text-app-blunder ring-1 ring-app-blunder/30">
@@ -349,22 +395,28 @@ export function OpponentScoutPage({ myUsername }: OpponentScoutPageProps) {
       )}
 
       {!report ? (
-        <Card>
-          <div className="flex flex-col items-center gap-3 py-16 text-center">
-            <div className="grid h-11 w-11 place-items-center rounded-full bg-app-panelSecondary text-app-muted">
-              <Crosshair className="h-5 w-5" />
-            </div>
-            <p className="max-w-md text-sm text-app-muted">
-              {loading
-                ? "Reading their games, building the opening tree" + (engine ? " and checking positions with Stockfish…" : "…")
-                : "Enter your next opponent's username to see their repertoire, how well they know each line, and where to take the game."}
-            </p>
-          </div>
-        </Card>
+        <>
+          {loading ? (
+            <Card>
+              <div className="flex flex-col items-center gap-3 py-14 text-center" role="status" aria-live="polite">
+                <div className="grid h-11 w-11 place-items-center rounded-full bg-app-panelSecondary text-app-accent">
+                  <Crosshair className="h-5 w-5 animate-ring-pulse" />
+                </div>
+                <p className="max-w-md text-sm text-app-muted">
+                  Reading {opponent.trim() || "their"}'s games and building their opening tree
+                  {engine ? ", then checking positions with Stockfish" : ""}. This usually takes 20–60 seconds.
+                </p>
+              </div>
+            </Card>
+          ) : (
+            <HowItWorks />
+          )}
+          <FriendsCard watch={watch} onScout={scoutUser} />
+        </>
       ) : report.profile.games === 0 ? (
         <Card>
           <p className="py-10 text-center text-sm text-app-muted">
-            No standard games found for {report.username} with these filters.
+            No standard games found for {report.username} with these filters. Try "Any time control" or more games.
           </p>
         </Card>
       ) : (
@@ -378,28 +430,125 @@ export function OpponentScoutPage({ myUsername }: OpponentScoutPageProps) {
               </>
             }
           />
-          <GamePlan report={report} />
-          <div ref={explorerRef} className="scroll-mt-6">
-            <Explorer report={report} side={side} onSideChange={(s) => { setSide(s); setPath([]); }} path={path} onPathChange={setPath} />
+          <ColourPicker report={report} you={you} onChange={changeYou} />
+
+          <div ref={tabsRef} className="scroll-mt-4">
+            <TabBar tab={tab} onChange={setTab} deepRunning={deepRunning} hasDeep={!!deep} />
           </div>
-          <KeyLines report={report} onOpen={openLine} />
-          <Repertoire report={report} onOpen={openLine} />
-          <HeadToHead report={report} onOpen={openLine} />
-          {report.habits ? <HabitsPanel report={report} /> : <Habits report={report} />}
-          {reportFilters && (
-            <DeepAnalysisPanel
-              key={`${report.username}|${reportFilters.limit}|${reportFilters.time_class}|${reportFilters.rated_only}`}
-              username={report.username}
-              filters={reportFilters}
+
+          {tab === "briefing" && (
+            <Briefing
+              report={report}
+              you={you}
+              deep={deep}
+              deepRunning={deepRunning}
               onOpen={openLine}
-              onResult={setDeep}
+              onTab={goTab}
+              methodology={<Methodology report={report} />}
             />
           )}
-          {report.matchup && <Matchup report={report} />}
-          <Methodology report={report} />
+
+          {tab === "openings" && (
+            <div className="grid gap-5">
+              <Explorer report={report} side={opp} path={path} onPathChange={setPath} />
+              <KeyLines report={report} side={opp} onOpen={openLine} />
+              <Repertoire report={report} side={opp} onOpen={openLine} />
+            </div>
+          )}
+
+          {tab === "habits" && (
+            <div className="grid gap-5">
+              {report.habits ? <HabitsPanel report={report} /> : <Habits report={report} />}
+              <HeadToHead report={report} onOpen={openLine} />
+              {report.matchup && <Matchup report={report} />}
+            </div>
+          )}
+
+          {/* Kept mounted so a running job keeps polling and its results reach the briefing. */}
+          {reportFilters && (
+            <div hidden={tab !== "deep"}>
+              <DeepAnalysisPanel
+                key={`${report.username}|${reportFilters.limit}|${reportFilters.time_class}|${reportFilters.rated_only}`}
+                username={report.username}
+                filters={reportFilters}
+                onOpen={openLine}
+                onResult={setDeep}
+                onRunningChange={setDeepRunning}
+                focusColor={opp}
+              />
+            </div>
+          )}
+
           <PrepSheet report={report} deep={deep} />
         </>
       )}
+    </div>
+  );
+}
+
+const TABS: Array<{ key: ScoutTab; label: string; hint: string }> = [
+  { key: "briefing", label: "Briefing", hint: "Your plan" },
+  { key: "openings", label: "Openings", hint: "Move by move" },
+  { key: "habits", label: "Habits", hint: "Tilt, time, positions" },
+  { key: "deep", label: "Engine deep dive", hint: "Mistakes & traps" },
+];
+
+function TabBar({
+  tab,
+  onChange,
+  deepRunning,
+  hasDeep,
+}: {
+  tab: ScoutTab;
+  onChange: (tab: ScoutTab) => void;
+  deepRunning: boolean;
+  hasDeep: boolean;
+}) {
+  return (
+    <div role="tablist" aria-label="Report sections" className="grid grid-cols-2 gap-1 rounded-2xl border border-app-border bg-app-panelSecondary p-1 sm:grid-cols-4">
+      {TABS.map((t) => {
+        const active = t.key === tab;
+        return (
+          <button
+            key={t.key}
+            type="button"
+            role="tab"
+            aria-selected={active}
+            onClick={() => onChange(t.key)}
+            className={`rounded-xl px-3 py-2 text-left transition ${
+              active ? "bg-app-raisedHover shadow-sheen ring-1 ring-inset ring-app-accentLine" : "hover:bg-white/[0.04]"
+            }`}
+          >
+            <span className={`flex items-center gap-1.5 text-sm font-semibold ${active ? "text-app-text" : "text-app-muted"}`}>
+              {t.label}
+              {t.key === "deep" && deepRunning && <span className="h-1.5 w-1.5 animate-ring-pulse rounded-full bg-app-accent" aria-label="running" />}
+              {t.key === "deep" && !deepRunning && hasDeep && <span className="h-1.5 w-1.5 rounded-full bg-app-good" aria-label="ready" />}
+            </span>
+            <span className="block truncate text-[11px] text-app-faint">{t.hint}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function HowItWorks() {
+  const steps = [
+    { n: "1", title: "Pick who you're playing", text: "Type their Chess.com username and the time control you'll play." },
+    { n: "2", title: "Choose your colour", text: "The report shows only what matters for that colour." },
+    { n: "3", title: "Follow the plan", text: "A short numbered plan, with buttons that show each line on a board." },
+  ];
+  return (
+    <div className="grid gap-3 sm:grid-cols-3">
+      {steps.map((step) => (
+        <div key={step.n} className="rounded-2xl border border-app-border bg-app-raised/40 p-4">
+          <span className="grid h-7 w-7 place-items-center rounded-full bg-app-accentSoft font-mono text-xs font-semibold text-app-accent">
+            {step.n}
+          </span>
+          <p className="mt-2 text-sm font-semibold text-app-text">{step.title}</p>
+          <p className="mt-0.5 text-xs leading-relaxed text-app-muted">{step.text}</p>
+        </div>
+      ))}
     </div>
   );
 }
@@ -441,97 +590,15 @@ function Toggle({
 function ProfileStrip({ report, actions }: { report: ScoutingReport; actions?: ReactNode }) {
   const p = report.profile;
   const ratings = Object.entries(p.ratings);
-  const losses = p.terminations.loss.reduce((sum, row) => sum + row.games, 0);
-  const timeLosses = p.terminations.loss.find((row) => row.reason === "time")?.games ?? 0;
   return (
-    <div className="grid gap-3">
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-        <h2 className="font-mono text-xl font-semibold text-app-text">{report.username}</h2>
-        {ratings.map(([tc, rating]) => (
-          <Badge key={tc} tone="neutral">{`${tc} ${rating}`}</Badge>
-        ))}
-        <span className="text-xs text-app-faint">
-          {p.games} games · avg {p.avg_game_length?.toFixed(0) ?? "–"} moves
-          {report.engine.enabled &&
-            (report.engine.available
-              ? ` · ${report.engine.evaluated_games} positions engine-checked`
-              : " · engine check unavailable")}
-        </span>
-        {actions && <div className="flex flex-wrap items-center gap-2 sm:ml-auto">{actions}</div>}
-      </div>
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard
-          label="Score vs rating"
-          value={pct(p.overall.score_pct)}
-          icon={TrendingUp}
-          caption={`expected ${pct(p.overall.expected_pct)}`}
-          delta={p.overall.perf_delta}
-          invertDelta
-        />
-        <StatCard
-          label="As White"
-          value={pct(p.white.score_pct)}
-          icon={Swords}
-          caption={`${p.white.games} games`}
-          delta={p.white.perf_delta}
-          invertDelta
-        />
-        <StatCard
-          label="As Black"
-          value={pct(p.black.score_pct)}
-          icon={ShieldAlert}
-          caption={`${p.black.games} games`}
-          delta={p.black.perf_delta}
-          invertDelta
-        />
-        <StatCard
-          label="Losses on time"
-          value={losses ? pct((timeLosses / losses) * 100) : "–"}
-          icon={Hourglass}
-          caption={`${timeLosses} of ${losses} losses`}
-        />
-      </div>
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+      <h2 className="font-mono text-xl font-semibold text-app-text">{report.username}</h2>
+      {ratings.map(([tc, rating]) => (
+        <Badge key={tc} tone="neutral">{`${tc} ${rating}`}</Badge>
+      ))}
+      <span className="text-xs text-app-faint">based on their last {p.games} games</span>
+      {actions && <div className="flex flex-wrap items-center gap-2 sm:ml-auto">{actions}</div>}
     </div>
-  );
-}
-
-// ── game plan ─────────────────────────────────────────────────────────────────
-
-function GamePlan({ report }: { report: ScoutingReport }) {
-  const plan = report.game_plan;
-  const columns: Array<{ title: string; items: string[]; icon: ReactNode }> = [
-    { title: "When you have White", items: plan.you_white, icon: <span className="h-3 w-3 rounded-full bg-[#f0d9b5]" /> },
-    { title: "When you have Black", items: plan.you_black, icon: <span className="h-3 w-3 rounded-full bg-[#3a3a40] ring-1 ring-white/20" /> },
-    { title: "Habits to exploit", items: plan.general, icon: <Target className="h-3.5 w-3.5 text-app-accent" /> },
-  ];
-  return (
-    <Card>
-      <CardHeader title="Game plan" eyebrow={`Against ${report.username}`}>
-        Takeaways from their results, adjusted for the ratings they faced.
-      </CardHeader>
-      <div className="grid gap-4 lg:grid-cols-3">
-        {columns.map((col) => (
-          <div key={col.title} className="rounded-xl border border-app-border bg-app-raised/50 p-4">
-            <div className="mb-3 flex items-center gap-2">
-              {col.icon}
-              <h3 className="text-sm font-semibold text-app-text">{col.title}</h3>
-            </div>
-            {col.items.length ? (
-              <ul className="grid gap-2.5">
-                {col.items.map((item) => (
-                  <li key={item} className="flex gap-2 text-sm leading-relaxed text-app-muted">
-                    <ChevronRight className="mt-1 h-3.5 w-3.5 shrink-0 text-app-accent/70" />
-                    <span>{item}</span>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="text-sm text-app-faint">Not enough games for a clear signal.</p>
-            )}
-          </div>
-        ))}
-      </div>
-    </Card>
   );
 }
 
@@ -540,13 +607,11 @@ function GamePlan({ report }: { report: ScoutingReport }) {
 function Explorer({
   report,
   side,
-  onSideChange,
   path,
   onPathChange,
 }: {
   report: ScoutingReport;
   side: Side;
-  onSideChange: (side: Side) => void;
   path: string[];
   onPathChange: (path: string[]) => void;
 }) {
@@ -563,20 +628,12 @@ function Explorer({
   return (
     <Card>
       <CardHeader
-        title="Opening explorer"
-        eyebrow="Their games, move by move"
-        action={
-          <Segmented<Side>
-            value={side}
-            onChange={onSideChange}
-            options={[
-              { value: "black", label: `They're Black (${report.profile.black.games})` },
-              { value: "white", label: `They're White (${report.profile.white.games})` },
-            ]}
-          />
-        }
+        title="Their games, move by move"
+        eyebrow={`Opening explorer · they're ${side === "white" ? "White" : "Black"} (${report.profile[side].games} games)`}
       >
-        Scores are theirs; green means they do worse than their rating predicts.
+        Every row is a move from their real games. Click one to play it on the board. Rows marked{" "}
+        <span className="font-semibold text-app-good">weak spot</span> are where they score worse than their rating predicts,
+        so that's where you want to go.
       </CardHeader>
 
       <div className="grid gap-5 lg:grid-cols-[minmax(280px,420px)_1fr]">
@@ -644,22 +701,34 @@ function Explorer({
           {node.children.length ? (
             <>
               <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-app-subtle">
-                {theyToMove ? "What they play here" : "What their opponents tried"}
+                {theyToMove ? "Their answers here" : "Your options here (what their opponents tried)"}
               </p>
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[520px] text-sm">
+                <table className="w-full min-w-[560px] text-sm">
                   <thead>
-                    <tr className="text-left text-[11px] uppercase tracking-wider text-app-faint">
+                    <tr className="whitespace-nowrap text-left text-[11px] uppercase tracking-wider text-app-faint">
                       <th className="pb-2 font-medium">Move</th>
                       <th className="pb-2 font-medium">Played</th>
-                      <th className="pb-2 text-right font-medium">Their score</th>
-                      <th className="pb-2 text-right font-medium">vs rating</th>
-                      <th className="pb-2 text-right font-medium" title="Average engine eval after move 12, their point of view">
-                        Eval@12
+                      <th className="pb-2 text-right font-medium">
+                        <span className="inline-flex items-center gap-1">
+                          Their score <InfoTip label="Their score">{GLOSSARY.score}</InfoTip>
+                        </span>
+                      </th>
+                      <th className="pb-2 text-right font-medium">
+                        <span className="inline-flex items-center gap-1">
+                          vs expected <InfoTip label="vs expected">{GLOSSARY.vsExpected}</InfoTip>
+                        </span>
+                      </th>
+                      <th className="pb-2 text-right font-medium">
+                        <span className="inline-flex items-center gap-1">
+                          Move 12 <InfoTip label="Position at move 12">{GLOSSARY.evalAt12}</InfoTip>
+                        </span>
                       </th>
                       {theyToMove && (
-                        <th className="pb-2 text-right font-medium" title="Share of their starting clock spent on this move">
-                          Clock
+                        <th className="pb-2 text-right font-medium">
+                          <span className="inline-flex items-center gap-1">
+                            Clock <InfoTip label="Clock">{GLOSSARY.clock}</InfoTip>
+                          </span>
                         </th>
                       )}
                     </tr>
@@ -677,7 +746,8 @@ function Explorer({
                           <td className="py-2 pr-2">
                             <div className="flex items-center gap-2">
                               <ConfidenceDot games={child.games} />
-                              <span className="font-mono font-medium text-app-text">{moveLabel(child.ply, child.san ?? "")}</span>
+                              <span className="whitespace-nowrap font-mono font-medium text-app-text">{moveLabel(child.ply, child.san ?? "")}</span>
+                              <VerdictTag games={child.games} shrunk={child.shrunk_delta} />
                             </div>
                           </td>
                           <td className="py-2 pr-3">
@@ -723,28 +793,53 @@ function Explorer({
   );
 }
 
+/** Plain-language label for a tree row: only shown when the sample is big enough to mean something. */
+function VerdictTag({ games, shrunk }: { games: number; shrunk: number }) {
+  if (games < 3 || Math.abs(shrunk) < 4) return null;
+  const weak = shrunk < 0;
+  return (
+    <span
+      className={`whitespace-nowrap rounded-full px-1.5 py-0.5 font-sans text-[10px] font-semibold ring-1 ring-inset ${
+        weak ? "bg-app-good/10 text-app-good ring-app-good/30" : "bg-app-blunder/10 text-app-blunder ring-app-blunder/30"
+      }`}
+    >
+      {weak ? "weak spot" : "their strength"}
+    </span>
+  );
+}
+
 // ── key lines ─────────────────────────────────────────────────────────────────
 
-function KeyLines({ report, onOpen }: { report: ScoutingReport; onOpen: (side: Side, path: string[]) => void }) {
+function KeyLines({
+  report,
+  side,
+  onOpen,
+}: {
+  report: ScoutingReport;
+  side: Side;
+  onOpen: (side: Side, path: string[]) => void;
+}) {
   return (
     <div className="grid gap-5 xl:grid-cols-3">
       <LineList
-        title="Steer into"
+        title="Go for these"
         eyebrow="They underperform here"
+        tip={<InfoTip label="Go for these">{GLOSSARY.steer}</InfoTip>}
         empty="No line with enough games where they clearly underperform."
-        lines={report.steer_into}
+        lines={report.steer_into.filter((l) => l.opponent_color === side)}
         tone="good"
         onOpen={onOpen}
       />
       <LineList
-        title="Avoid"
+        title="Avoid these"
         eyebrow="Their home turf"
+        tip={<InfoTip label="Avoid these">{GLOSSARY.avoid}</InfoTip>}
         empty="No line where they clearly overperform."
-        lines={report.avoid}
+        lines={report.avoid.filter((l) => l.opponent_color === side)}
         tone="bad"
         onOpen={onOpen}
       />
-      <DecisionList points={report.decision_points} onOpen={onOpen} />
+      <DecisionList points={report.decision_points.filter((p) => p.opponent_color === side)} onOpen={onOpen} />
     </div>
   );
 }
@@ -759,10 +854,12 @@ function LineList({
   empty,
   lines,
   tone,
+  tip,
   onOpen,
 }: {
   title: string;
   eyebrow: string;
+  tip?: ReactNode;
   empty: string;
   lines: ScoutLine[];
   tone: "good" | "bad";
@@ -770,7 +867,7 @@ function LineList({
 }) {
   return (
     <Card>
-      <CardHeader title={title} eyebrow={eyebrow} />
+      <CardHeader title={title} eyebrow={eyebrow} action={tip} />
       {lines.length ? (
         <ul className="grid gap-2">
           {lines.map((line) => (
@@ -785,15 +882,11 @@ function LineList({
                   <ArrowUpRight className="h-3.5 w-3.5 shrink-0 text-app-faint group-hover:text-app-accent" />
                 </div>
                 <div className="mt-1.5 flex flex-wrap items-center gap-2 text-xs text-app-muted">
-                  <Badge tone="neutral">{sideTag(line.opponent_color)}</Badge>
-                  <span className="nums">{line.games} games</span>
                   <span className={`nums font-semibold ${tone === "good" ? "text-app-good" : "text-app-blunder"}`}>
-                    they score {pct(line.score_pct)}
+                    They score {pct(line.score_pct)}
                   </span>
-                  {line.expected_pct !== null && <span className="nums text-app-faint">exp {pct(line.expected_pct)}</span>}
-                  {line.avg_eval_cp !== null && (
-                    <span className={`nums font-mono ${evalTone(line.avg_eval_cp)}`}>@12 {evalText(line.avg_eval_cp)}</span>
-                  )}
+                  {line.expected_pct !== null && <span className="nums text-app-faint">(expected {pct(line.expected_pct)})</span>}
+                  <span className="nums text-app-faint">· {line.games} games</span>
                 </div>
               </button>
             </li>
@@ -809,7 +902,11 @@ function LineList({
 function DecisionList({ points, onOpen }: { points: ScoutDecisionPoint[]; onOpen: (side: Side, path: string[]) => void }) {
   return (
     <Card>
-      <CardHeader title="Where they get unsure" eyebrow="Prep runs out" />
+      <CardHeader
+        title="Where they get unsure"
+        eyebrow="Their prep runs out"
+        action={<InfoTip label="Where they get unsure">{GLOSSARY.unsure}</InfoTip>}
+      />
       {points.length ? (
         <ul className="grid gap-2">
           {points.map((point) => (
@@ -840,28 +937,26 @@ function DecisionList({ points, onOpen }: { points: ScoutDecisionPoint[]; onOpen
 
 // ── repertoire ────────────────────────────────────────────────────────────────
 
-function Repertoire({ report, onOpen }: { report: ScoutingReport; onOpen: (side: Side, path: string[]) => void }) {
-  const [side, setSide] = useState<Side>(report.profile.black.games >= report.profile.white.games ? "black" : "white");
+function Repertoire({
+  report,
+  side,
+  onOpen,
+}: {
+  report: ScoutingReport;
+  side: Side;
+  onOpen: (side: Side, path: string[]) => void;
+}) {
   const families = report.families[side];
   const moveRows = side === "white" ? report.as_white.first_moves : report.as_black.vs_first_moves;
   return (
     <Card>
       <CardHeader
-        title="Repertoire & familiarity"
+        title={`Openings they play as ${side === "white" ? "White" : "Black"}`}
         eyebrow="What they know"
-        action={
-          <Segmented<Side>
-            value={side}
-            onChange={setSide}
-            options={[
-              { value: "black", label: "As Black" },
-              { value: "white", label: "As White" },
-            ]}
-          />
-        }
+        action={<InfoTip label="Familiarity">{GLOSSARY.familiarity}</InfoTip>}
       >
-        Familiarity blends how often they play a line, how deep they follow their own move order, and how fast they play
-        its first ten moves.
+        Each opening shows how well they know it and how they score. Tap one for its variations, their usual moves and recent
+        games.
       </CardHeader>
 
       <FirstMoves rows={moveRows} side={side} />

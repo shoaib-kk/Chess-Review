@@ -107,10 +107,10 @@ export function Fingerprint({ data }: { data: ScoutFingerprint | null }) {
       </div>
 
       <div className="grid gap-3 sm:grid-cols-3">
-        <Big label="Avg centipawn loss" value={data.avg_cp_loss !== null ? data.avg_cp_loss.toFixed(0) : "–"} caption="per move, lower is cleaner" />
-        <Big label="Accuracy estimate" value={data.accuracy_estimate !== null ? data.accuracy_estimate.toFixed(0) : "–"} caption="from engine analysis" />
+        <Big label="Average error per move" value={data.avg_cp_loss !== null ? data.avg_cp_loss.toFixed(0) : "–"} caption="hundredths of a pawn; under 30 is clean, over 60 is loose" />
+        <Big label="Accuracy" value={data.accuracy_estimate !== null ? `${data.accuracy_estimate.toFixed(0)}%` : "–"} caption="like Chess.com's game review score" />
         <Big
-          label="Converts / saves"
+          label="Wins when ahead / saves when behind"
           value={`${pct(data.conversion.converted_pct)} / ${pct(data.conversion.saved_pct)}`}
           caption={`${data.conversion.converted} of ${data.conversion.winning_games} winning, ${data.conversion.saved} of ${data.conversion.losing_games} losing`}
         />
@@ -125,7 +125,7 @@ export function Fingerprint({ data }: { data: ScoutFingerprint | null }) {
               <thead>
                 <tr className="text-left text-[11px] uppercase tracking-wider text-app-faint">
                   <th className="pb-2 font-medium">Phase</th>
-                  <th className="pb-2 text-right font-medium">Avg loss</th>
+                  <th className="pb-2 text-right font-medium">Avg error</th>
                   <th className="pb-2 text-right font-medium">Mistakes</th>
                   <th className="pb-2 text-right font-medium">Blunders</th>
                   <th className="pb-2 text-right font-medium" title="Blunders per 100 moves">Per 100</th>
@@ -219,7 +219,7 @@ export function Fingerprint({ data }: { data: ScoutFingerprint | null }) {
       {data.opening_cliffs.length > 0 && (
         <Sub title="Opening cliffs">
           <p className="mb-2 text-xs text-app-muted">
-            Average centipawn loss by move number; the red bar is where their play drops off.
+            How big their errors are at each move number (taller = worse). The red bar is where their play drops off: they've left what they know.
           </p>
           <ul className="grid gap-2">
             {data.opening_cliffs.map((row) => (

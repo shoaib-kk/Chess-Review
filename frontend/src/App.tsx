@@ -278,7 +278,7 @@ export default function App() {
 
       <main
         className={`mx-auto w-full max-w-7xl px-4 py-6 transition-[margin] duration-300 ease-spring lg:px-8 lg:py-8 ${
-          navCollapsed ? "lg:ml-[76px]" : "lg:ml-64"
+          navCollapsed ? "lg:ml-[76px] lg:w-[calc(100%-76px)]" : "lg:ml-64 lg:w-[calc(100%-16rem)]"
         }`}
       >
         {error && (
