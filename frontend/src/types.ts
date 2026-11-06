@@ -478,3 +478,191 @@ export interface InboxData {
   games: InboxGame[];
   count: number;
 }
+
+// ── Opponent scouting (/scout/{username}) ────────────────────────────────────
+
+export type ScoutTimeClass = TimeClassFilter | "daily";
+
+/** Result/expectation numbers for a group of the scouted player's games (their POV). */
+export interface ScoutStats {
+  games: number;
+  frequency: number | null;
+  wins: number;
+  draws: number;
+  losses: number;
+  score_pct: number;
+  expected_pct: number | null;
+  /** Actual minus rating-expected score, in percentage points. Negative = they underperform. */
+  perf_delta: number | null;
+  /** perf_delta shrunk toward 0 for small samples (the ranking signal). */
+  shrunk_delta: number;
+  confidence: "low" | "medium" | "high";
+  avg_accuracy: number | null;
+  /** Mean Stockfish eval after move 12, centipawns, their POV (engine pass only). */
+  avg_eval_cp: number | null;
+  evaluated_games: number;
+  early_loss_rate: number;
+  avg_opening_time_pct: number | null;
+  avg_book_depth: number | null;
+  avg_first_think: number | null;
+  avg_opp_rating: number | null;
+  last_played: string | null;
+}
+
+export interface ScoutFamiliarity {
+  score: number;
+  label: "Main weapon" | "Comfortable" | "Occasional" | "Rarely seen";
+  components: { volume: number; book_depth: number; speed: number };
+}
+
+export interface ScoutFamilyRow extends ScoutStats {
+  family: string;
+  eco: string;
+  familiarity: ScoutFamiliarity;
+  main_line: string;
+  main_line_path: string[];
+  main_line_games: number;
+  variations: Array<ScoutStats & { variation: string }>;
+  recent_games: Array<{
+    date: string | null;
+    url: string | null;
+    foe: string;
+    result: "win" | "draw" | "loss";
+    variation: string | null;
+    own_rating: number | null;
+    foe_rating: number | null;
+  }>;
+}
+
+export interface ScoutMoveRow extends ScoutStats {
+  move: string;
+  replies: Array<ScoutStats & { move: string }>;
+  families?: Array<ScoutStats & { family: string }>;
+}
+
+export interface ScoutTreeNode {
+  san: string | null;
+  ply: number;
+  path: string[];
+  fen: string;
+  by: "them" | "you" | null;
+  avg_time_pct: number | null;
+  games: number;
+  wins: number;
+  draws: number;
+  losses: number;
+  score_pct: number;
+  expected_pct: number | null;
+  perf_delta: number | null;
+  shrunk_delta: number;
+  avg_eval_cp: number | null;
+  evaluated_games: number;
+  avg_accuracy: number | null;
+  frequency?: number;
+  children: ScoutTreeNode[];
+}
+
+export interface ScoutLine {
+  opponent_color: "white" | "black";
+  path: string[];
+  line: string;
+  fen: string;
+  games: number;
+  share_of_parent: number;
+  score_pct: number;
+  expected_pct: number | null;
+  perf_delta: number | null;
+  shrunk_delta: number;
+  avg_eval_cp: number | null;
+  early_loss_rate: number;
+  reason: string;
+}
+
+export interface ScoutDecisionPoint {
+  opponent_color: "white" | "black";
+  path: string[];
+  line: string;
+  fen: string;
+  games: number;
+  score_pct: number;
+  perf_delta: number | null;
+  replies: Array<{ san: string; games: number; score_pct: number }>;
+  avg_time_pct: number | null;
+  reason: string;
+}
+
+export interface ScoutTermination {
+  reason: string;
+  games: number;
+  pct: number;
+}
+
+export interface ScoutMatchup {
+  username: string;
+  games: number;
+  you_white: Array<{
+    move: string;
+    your_games: number;
+    your_score_pct: number;
+    their_games: number;
+    their_score_pct: number | null;
+    their_shrunk_delta: number;
+    likely_lines: Array<{
+      family: string;
+      their_share: number;
+      their_score_pct: number;
+      your_games: number;
+      your_score_pct: number | null;
+    }>;
+    edge: number;
+  }>;
+  you_black: Array<{
+    their_move: string;
+    their_share: number;
+    options: Array<{
+      reply: string;
+      your_games: number;
+      your_score_pct: number;
+      their_games: number;
+      their_score_pct: number | null;
+      edge: number;
+    }>;
+  }>;
+}
+
+export interface ScoutingReport {
+  username: string;
+  filters: { limit: number; time_class: string | null; rated_only: boolean; engine: boolean; me: string | null };
+  profile: {
+    games: number;
+    ratings: Record<string, number>;
+    time_classes: Record<string, number>;
+    overall: ScoutStats;
+    white: ScoutStats;
+    black: ScoutStats;
+    avg_game_length: number | null;
+    terminations: { win: ScoutTermination[]; loss: ScoutTermination[]; draw: ScoutTermination[] };
+    long_games: ScoutStats;
+    short_games: ScoutStats;
+    clock_games: number;
+  };
+  baseline: { avg_move_time_pct: number | null; avg_opening_time_pct: number | null };
+  families: { white: ScoutFamilyRow[]; black: ScoutFamilyRow[] };
+  as_white: { games: number; first_moves: ScoutMoveRow[] };
+  as_black: { games: number; vs_first_moves: ScoutMoveRow[] };
+  tree: { white: ScoutTreeNode; black: ScoutTreeNode };
+  steer_into: ScoutLine[];
+  avoid: ScoutLine[];
+  decision_points: ScoutDecisionPoint[];
+  recent_changes: Array<{
+    color: "white" | "black";
+    family: string;
+    recent_share: number;
+    earlier_share: number;
+    direction: "new" | "dropped";
+    recent_games: number;
+  }>;
+  engine: { enabled: boolean; available?: boolean; depth?: number; eval_ply?: number; evaluated_games?: number; error?: string };
+  game_plan: { you_white: string[]; you_black: string[]; general: string[] };
+  matchup: ScoutMatchup | null;
+}

@@ -19,6 +19,7 @@ import { Header } from "./components/Header";
 import { HomeDashboard } from "./components/HomeDashboard";
 import { MoveListPanel } from "./components/MoveList";
 import { OpeningRepertoirePage } from "./components/OpeningRepertoirePage";
+import { OpponentScoutPage } from "./components/OpponentScoutPage";
 import { PlayerInsightsPage } from "./components/PlayerInsightsPage";
 import { PuzzlePage } from "./components/PuzzlePage";
 import { TrainingPage } from "./components/TrainingPage";
@@ -29,7 +30,7 @@ import { Surface } from "./components/ui/Surface";
 import { SAMPLE_GAME_PGN } from "./data/sampleGame";
 import type { AnalysisLine, AnalysisMode, ChessComGame, GameSummary, InboxGame, OpeningRepertoire, PlayerInsights, TimeClassFilter } from "./types";
 
-type AppMode = "home" | "chesscom" | "pgn" | "insights" | "repertoire" | "puzzles" | "training" | "daily";
+type AppMode = "home" | "chesscom" | "pgn" | "insights" | "repertoire" | "puzzles" | "training" | "daily" | "scout";
 const USERNAME_STORAGE_KEY = "cr_username";
 const NAV_COLLAPSED_KEY = "cr_nav_collapsed";
 
@@ -312,6 +313,8 @@ export default function App() {
                 <TrainingPage username={sharedUsername} />
               ) : activeMode === "daily" ? (
                 <DailyPage username={sharedUsername} />
+              ) : activeMode === "scout" ? (
+                <OpponentScoutPage myUsername={sharedUsername} />
               ) : loading && (activeMode === "chesscom" || activeMode === "pgn") ? (
                 <div className="mx-auto max-w-3xl py-6">
                   <AnalysisProgress plies={analysisInfo.plies} mode={analysisInfo.mode} />

@@ -16,6 +16,8 @@ import type {
   PuzzleList,
   PuzzleProgress,
   PuzzleDifficultyFilter,
+  ScoutTimeClass,
+  ScoutingReport,
   PuzzlePhaseFilter,
   TimeClassFilter,
   TrainingPlan,
@@ -103,6 +105,24 @@ export async function fetchOpeningRepertoire(
       time_class: params.time_class || undefined,
       rated_only: params.rated_only ?? false,
     },
+  });
+  return response.data;
+}
+
+export async function fetchScoutingReport(
+  username: string,
+  params: { limit?: number; time_class?: ScoutTimeClass; rated_only?: boolean; engine?: boolean; me?: string } = {},
+): Promise<ScoutingReport> {
+  const response = await api.get<ScoutingReport>(`/scout/${encodeURIComponent(username)}`, {
+    params: {
+      limit: params.limit ?? 300,
+      time_class: params.time_class || undefined,
+      rated_only: params.rated_only ?? false,
+      engine: params.engine ?? false,
+      me: params.me || undefined,
+    },
+    // Fetching two archives plus an optional engine pass can take a while.
+    timeout: 180000,
   });
   return response.data;
 }
