@@ -234,3 +234,20 @@ class ImportCursor(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
+
+
+class ScoutWatch(Base):
+    """A Chess.com username a device is watching for the opponent-scout alerts."""
+
+    __tablename__ = "scout_watch"
+    __table_args__ = (UniqueConstraint("owner_id", "username", name="uq_scout_watch_owner_username"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    owner_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    username: Mapped[str] = mapped_column(String(64), nullable=False)
+    added_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_seen_end_time: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    last_seen_ratings: Mapped[dict | None] = mapped_column(JSONB, nullable=True)

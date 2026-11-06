@@ -1,6 +1,7 @@
 import {
   BarChart3,
   BookOpen,
+  Crosshair,
   Download,
   Dumbbell,
   FileText,
@@ -15,7 +16,7 @@ import {
 import type { LucideIcon } from "lucide-react";
 import { ChessGlyph } from "./ui/ChessGlyph";
 
-type Mode = "home" | "chesscom" | "pgn" | "insights" | "repertoire" | "puzzles" | "training" | "daily";
+type Mode = "home" | "chesscom" | "pgn" | "insights" | "repertoire" | "puzzles" | "training" | "daily" | "scout";
 
 interface HeaderProps {
   activeMode: Mode;
@@ -56,6 +57,7 @@ const navSections: { heading: string; items: NavItem[] }[] = [
     items: [
       { mode: "insights", label: "Insights", icon: BarChart3, title: "Win rate, accuracy, and trends over time" },
       { mode: "repertoire", label: "Repertoire", icon: BookOpen, title: "Your openings and where to improve" },
+      { mode: "scout", label: "Scout opponent", icon: Crosshair, title: "Prepare for an opponent: their openings and weak spots" },
     ],
   },
 ];

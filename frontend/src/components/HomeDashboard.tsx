@@ -37,6 +37,7 @@ import type {
   PuzzleList,
 } from "../types";
 import { SAMPLE_GAME_LABEL } from "../data/sampleGame";
+import { FriendsStrip } from "./scout/FriendsStrip";
 import { ApiStatusIndicator } from "./ApiStatusIndicator";
 import { Button } from "./ui/Button";
 import { ChessGlyph } from "./ui/ChessGlyph";
@@ -61,6 +62,7 @@ interface HomeDashboardProps {
   onOpenPuzzles: () => void;
   onOpenTraining: () => void;
   onOpenDaily: () => void;
+  onScoutFriend: (username: string) => void;
   onReviewInboxGame: (game: InboxGame) => void;
   sampleLoading: boolean;
   activeReview: GameSummary | null;
@@ -200,6 +202,7 @@ function DashboardBody({
   onOpenPuzzles,
   onOpenTraining,
   onOpenDaily,
+  onScoutFriend,
   onReviewInboxGame,
   onImportGame,
   onPastePgn,
@@ -252,6 +255,8 @@ function DashboardBody({
         onOpenDaily={onOpenDaily}
         onReviewInboxGame={onReviewInboxGame}
       />
+
+      <FriendsStrip onScoutFriend={onScoutFriend} />
 
       {/* Hero row: focus / resume + accuracy ring */}
       <div className="grid gap-4 lg:grid-cols-12">

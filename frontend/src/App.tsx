@@ -19,6 +19,7 @@ import { Header } from "./components/Header";
 import { HomeDashboard } from "./components/HomeDashboard";
 import { MoveListPanel } from "./components/MoveList";
 import { OpeningRepertoirePage } from "./components/OpeningRepertoirePage";
+import { OpponentScoutPage } from "./components/OpponentScoutPage";
 import { PlayerInsightsPage } from "./components/PlayerInsightsPage";
 import { PuzzlePage } from "./components/PuzzlePage";
 import { TrainingPage } from "./components/TrainingPage";
@@ -29,7 +30,7 @@ import { Surface } from "./components/ui/Surface";
 import { SAMPLE_GAME_PGN } from "./data/sampleGame";
 import type { AnalysisLine, AnalysisMode, ChessComGame, GameSummary, InboxGame, OpeningRepertoire, PlayerInsights, TimeClassFilter } from "./types";
 
-type AppMode = "home" | "chesscom" | "pgn" | "insights" | "repertoire" | "puzzles" | "training" | "daily";
+type AppMode = "home" | "chesscom" | "pgn" | "insights" | "repertoire" | "puzzles" | "training" | "daily" | "scout";
 const USERNAME_STORAGE_KEY = "cr_username";
 const NAV_COLLAPSED_KEY = "cr_nav_collapsed";
 
@@ -277,7 +278,7 @@ export default function App() {
 
       <main
         className={`mx-auto w-full max-w-7xl px-4 py-6 transition-[margin] duration-300 ease-spring lg:px-8 lg:py-8 ${
-          navCollapsed ? "lg:ml-[76px]" : "lg:ml-64"
+          navCollapsed ? "lg:ml-[76px] lg:w-[calc(100%-76px)]" : "lg:ml-64 lg:w-[calc(100%-16rem)]"
         }`}
       >
         {error && (
@@ -300,6 +301,15 @@ export default function App() {
             onOpenPuzzles={() => setActiveMode("puzzles")}
             onOpenTraining={() => setActiveMode("training")}
             onOpenDaily={() => setActiveMode("daily")}
+            onScoutFriend={(name) => {
+              try {
+                localStorage.setItem("cr_scout_opponent", name);
+                localStorage.setItem("cr_scout_autorun", "1");
+              } catch {
+                /* storage unavailable: the scout page will just open */
+              }
+              setActiveMode("scout");
+            }}
             onReviewInboxGame={reviewInboxGame}
             sampleLoading={loading}
             activeReview={summary}
@@ -312,6 +322,8 @@ export default function App() {
                 <TrainingPage username={sharedUsername} />
               ) : activeMode === "daily" ? (
                 <DailyPage username={sharedUsername} />
+              ) : activeMode === "scout" ? (
+                <OpponentScoutPage myUsername={sharedUsername} />
               ) : loading && (activeMode === "chesscom" || activeMode === "pgn") ? (
                 <div className="mx-auto max-w-3xl py-6">
                   <AnalysisProgress plies={analysisInfo.plies} mode={analysisInfo.mode} />

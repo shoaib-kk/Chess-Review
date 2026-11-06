@@ -52,6 +52,8 @@ services:
       APP_ENV: production
       # The bundled nginx sets X-Real-IP; trust it for accurate per-client limiting.
       TRUST_PROXY_HEADERS: "true"
+      # Optional: enables the Scout "traps at their rating" Lichess lookups.
+      LICHESS_TOKEN: ${LICHESS_TOKEN:-}
     depends_on:
       db:
         condition: service_healthy

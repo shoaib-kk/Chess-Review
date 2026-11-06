@@ -226,9 +226,19 @@ class StockfishEngine:
         if self.engine is None:
             raise EngineUnavailableError("Stockfish engine is not running.")
         try:
-            return self.engine.analyse(
-                board, limit, timeout=STOCKFISH_ANALYSE_TIMEOUT_S, **kwargs
-            )
+            # SimpleEngine.analyse() takes no ``timeout`` argument; it only enforces
+            # a wall-clock deadline (engine.timeout + limit.time) when the limit has
+            # a time component. Give depth/node-limited searches a generous time
+            # cap so they get that same hard deadline; normal searches finish on
+            # depth long before it.
+            if limit.time is None:
+                limit = chess.engine.Limit(
+                    depth=limit.depth,
+                    nodes=limit.nodes,
+                    mate=limit.mate,
+                    time=STOCKFISH_ANALYSE_TIMEOUT_S,
+                )
+            return self.engine.analyse(board, limit, **kwargs)
         except (chess.engine.EngineTerminatedError, chess.engine.EngineError, TimeoutError) as exc:
             engine = self.engine
             self.engine = None
