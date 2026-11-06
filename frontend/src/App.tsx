@@ -301,6 +301,15 @@ export default function App() {
             onOpenPuzzles={() => setActiveMode("puzzles")}
             onOpenTraining={() => setActiveMode("training")}
             onOpenDaily={() => setActiveMode("daily")}
+            onScoutFriend={(name) => {
+              try {
+                localStorage.setItem("cr_scout_opponent", name);
+                localStorage.setItem("cr_scout_autorun", "1");
+              } catch {
+                /* storage unavailable: the scout page will just open */
+              }
+              setActiveMode("scout");
+            }}
             onReviewInboxGame={reviewInboxGame}
             sampleLoading={loading}
             activeReview={summary}

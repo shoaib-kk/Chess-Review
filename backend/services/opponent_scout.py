@@ -1069,6 +1069,15 @@ def _matchup(report: dict[str, Any], my_games: list[ScoutGame], my_name: str) ->
     return {"username": my_name, "games": len(my_games), "you_white": as_white[:6], "you_black": as_black[:4]}
 
 
+def _safe_section(name: str, build: Any) -> Any:
+    """Optional report sections must never take the whole report down."""
+    try:
+        return build()
+    except Exception:
+        logger.warning("Scout section %s failed", name, exc_info=True)
+        return None
+
+
 def build_scouting_report(
     username: str,
     raw_games: list[dict[str, Any]],
@@ -1077,6 +1086,7 @@ def build_scouting_report(
     evaluator: Any = None,
     my_username: str | None = None,
     my_raw_games: list[dict[str, Any]] | None = None,
+    tz_offset_minutes: int = 0,
 ) -> dict[str, Any]:
     """Pure (given ``evaluator``) report builder.
 
@@ -1129,7 +1139,22 @@ def build_scouting_report(
         "engine": engine_meta,
         "matchup": None,
     }
+    # Local import: scout_habits imports helpers from this module.
+    from .scout_habits import build_habits, build_head_to_head
+
+    report["habits"] = _safe_section("habits", lambda: build_habits(raw_games, username, tz_offset_minutes=tz_offset_minutes))
+    report["head_to_head"] = (
+        _safe_section("head_to_head", lambda: build_head_to_head(raw_games, username, my_username))
+        if my_username and my_username.casefold() != username.casefold()
+        else None
+    )
     report["game_plan"] = _game_plan(report)
+    # Surface the strongest habit / head-to-head findings in the plan too.
+    for extra in ((report["habits"] or {}).get("insights") or [])[:3]:
+        if extra not in report["game_plan"]["general"]:
+            report["game_plan"]["general"].append(extra)
+    for extra in ((report["head_to_head"] or {}).get("insights") or [])[:1]:
+        report["game_plan"]["general"].insert(0, extra)
 
     if my_username and my_raw_games is not None:
         mine = [g for g in (parse_game(raw, my_username) for raw in my_raw_games) if g is not None]
@@ -1190,6 +1215,7 @@ def get_scouting_report(
     rated_only: bool = False,
     engine: bool = False,
     me: str | None = None,
+    tz_offset: int = 0,
 ) -> dict[str, Any]:
     username = username.strip()
     limit = max(20, min(limit, 500))
@@ -1213,8 +1239,10 @@ def get_scouting_report(
     return build_scouting_report(
         username,
         raw,
-        filters={"limit": limit, "time_class": time_class, "rated_only": rated_only, "engine": engine, "me": me},
+        filters={"limit": limit, "time_class": time_class, "rated_only": rated_only, "engine": engine, "me": me,
+                 "tz_offset": tz_offset},
         evaluator=_engine_evals if engine else None,
         my_username=me,
         my_raw_games=my_raw,
+        tz_offset_minutes=tz_offset,
     )

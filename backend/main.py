@@ -28,6 +28,7 @@ from .routers.play import router as play_router
 from .routers.drills import router as drills_router
 from .routers.daily import router as daily_router
 from .routers.training import router as training_router
+from .routers.scout_watch import router as scout_watch_router
 from .routers.scout import router as scout_router
 
 logger = logging.getLogger(__name__)
@@ -50,6 +51,8 @@ app.include_router(play_router)
 app.include_router(drills_router)
 app.include_router(daily_router)
 app.include_router(training_router)
+# Must precede scout_router so /scout/watch isn't captured as /scout/{username}.
+app.include_router(scout_watch_router)
 app.include_router(scout_router)
 
 

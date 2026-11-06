@@ -119,3 +119,78 @@ select {
   backface-visibility: hidden;
   transform: translateZ(0);
 }
+
+/* Scout prep sheet (print only) */
+.prep-sheet {
+  display: none;
+}
+
+@media print {
+  /* Only when the prep-sheet button set the flag; normal printing is untouched. */
+  body.cr-printing-prep {
+    background: #fff !important;
+    color: #111 !important;
+    height: 100vh;
+    overflow: hidden;
+  }
+  body.cr-printing-prep * {
+    visibility: hidden !important;
+  }
+  body.cr-printing-prep .prep-sheet,
+  body.cr-printing-prep .prep-sheet * {
+    visibility: visible !important;
+  }
+  body.cr-printing-prep .prep-sheet {
+    display: block;
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    padding: 0;
+    background: #fff;
+    color: #111;
+    font-family: system-ui, sans-serif;
+    font-size: 10pt;
+    line-height: 1.35;
+  }
+  .prep-sheet h1 {
+    margin: 0;
+    font-size: 16pt;
+  }
+  .prep-sheet header p {
+    margin: 2px 0 8px;
+    color: #444;
+  }
+  .prep-sheet h2 {
+    margin: 8px 0 3px;
+    padding-bottom: 2px;
+    border-bottom: 1px solid #999;
+    font-size: 11pt;
+  }
+  .prep-sheet h3 {
+    margin: 4px 0 1px;
+    font-size: 9.5pt;
+    color: #333;
+  }
+  .prep-sheet ul {
+    margin: 0;
+    padding-left: 16px;
+  }
+  .prep-sheet li {
+    margin-bottom: 2px;
+  }
+  .prep-sheet p {
+    margin: 0;
+  }
+  .prep-sheet .prep-cols {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0 18px;
+  }
+  .prep-sheet .prep-section {
+    break-inside: avoid;
+  }
+  @page {
+    margin: 12mm;
+  }
+}

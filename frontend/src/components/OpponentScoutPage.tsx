@@ -23,6 +23,7 @@ import {
 import { apiErrorMessage, fetchScoutingReport } from "../api/client";
 import type {
   ScoutDecisionPoint,
+  ScoutDeepResult,
   ScoutFamilyRow,
   ScoutLine,
   ScoutMoveRow,
@@ -37,6 +38,12 @@ import { Card, CardHeader } from "./ui/Card";
 import { Delta } from "./ui/Delta";
 import { StatCard } from "./ui/StatCard";
 import { WinLossBar } from "./ui/WinLossBar";
+import { DeepAnalysisPanel } from "./scout/DeepAnalysisPanel";
+import type { ScoutFilters } from "./scout/DeepAnalysisPanel";
+import { HabitsPanel } from "./scout/HabitsPanel";
+import { HeadToHead } from "./scout/HeadToHead";
+import { PrepSheet, PrepSheetButton } from "./scout/PrepSheet";
+import { FriendsCard, WatchButton, useWatchlist } from "./scout/Watchlist";
 
 interface OpponentScoutPageProps {
   /** The signed-in Chess.com username, used for the matchup section. */
@@ -46,6 +53,7 @@ interface OpponentScoutPageProps {
 type Side = "white" | "black"; // the *opponent's* colour
 
 const LAST_OPPONENT_KEY = "cr_scout_opponent";
+const AUTORUN_KEY = "cr_scout_autorun";
 
 const input =
   "h-11 w-full rounded-lg border border-app-border bg-app-panelSecondary px-3 text-sm text-app-text outline-none transition placeholder:text-app-muted focus-visible:border-app-accent focus-visible:ring-2 focus-visible:ring-app-accent/50";
@@ -196,6 +204,10 @@ export function OpponentScoutPage({ myUsername }: OpponentScoutPageProps) {
   const [report, setReport] = useState<ScoutingReport | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** Filters the current report was actually generated with (the deep analysis must use the same ones). */
+  const [reportFilters, setReportFilters] = useState<ScoutFilters | null>(null);
+  const [deep, setDeep] = useState<ScoutDeepResult | null>(null);
+  const watch = useWatchlist();
 
   const [side, setSide] = useState<Side>("black");
   const [path, setPath] = useState<string[]>([]);
@@ -204,8 +216,8 @@ export function OpponentScoutPage({ myUsername }: OpponentScoutPageProps) {
   const me = myUsername.trim();
   const sameAsMe = me && opponent.trim().toLowerCase() === me.toLowerCase();
 
-  async function runScout() {
-    const name = opponent.trim();
+  async function runScout(nameOverride?: string) {
+    const name = (nameOverride ?? opponent).trim();
     if (!name) return;
     setLoading(true);
     setError(null);
@@ -220,9 +232,11 @@ export function OpponentScoutPage({ myUsername }: OpponentScoutPageProps) {
         time_class: timeClass,
         rated_only: ratedOnly,
         engine,
-        me: compare && me && !sameAsMe ? me : undefined,
+        me: compare && me && name.toLowerCase() !== me.toLowerCase() ? me : undefined,
       });
       setReport(result);
+      setReportFilters({ limit, time_class: timeClass, rated_only: ratedOnly });
+      setDeep(null);
       setPath([]);
       // Start the explorer on the side you'll most likely need: their more-played colour.
       setSide(result.profile.black.games >= result.profile.white.games ? "black" : "white");
@@ -233,6 +247,26 @@ export function OpponentScoutPage({ myUsername }: OpponentScoutPageProps) {
     }
   }
 
+  /** Programmatic entry point: set the opponent and run the scout (used by the friends list and the dashboard). */
+  function scoutUser(name: string) {
+    setOpponent(name);
+    void runScout(name);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  // The dashboard sets this flag when a friend is clicked; run once, then clear it.
+  useEffect(() => {
+    let flagged = false;
+    try {
+      flagged = localStorage.getItem(AUTORUN_KEY) === "1";
+      if (flagged) localStorage.removeItem(AUTORUN_KEY);
+    } catch {
+      /* storage unavailable */
+    }
+    if (flagged && opponent.trim()) void runScout(opponent);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   function openLine(color: Side, linePath: string[]) {
     setSide(color);
     setPath(linePath);
@@ -240,7 +274,7 @@ export function OpponentScoutPage({ myUsername }: OpponentScoutPageProps) {
   }
 
   return (
-    <div className="grid animate-fade-in gap-5">
+    <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] animate-fade-in gap-5">
       <Card>
         <CardHeader title="Scout an opponent" eyebrow="Opening preparation">
           Read an opponent's public Chess.com games: what they play, what they know deeply, and where they score below
@@ -305,6 +339,8 @@ export function OpponentScoutPage({ myUsername }: OpponentScoutPageProps) {
         </div>
       </Card>
 
+      <FriendsCard watch={watch} onScout={scoutUser} />
+
       {error && (
         <div className="flex items-start gap-3 rounded-lg bg-app-blunder/10 px-4 py-3 text-sm text-app-blunder ring-1 ring-app-blunder/30">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
@@ -333,16 +369,35 @@ export function OpponentScoutPage({ myUsername }: OpponentScoutPageProps) {
         </Card>
       ) : (
         <>
-          <ProfileStrip report={report} />
+          <ProfileStrip
+            report={report}
+            actions={
+              <>
+                <WatchButton username={report.username} watch={watch} />
+                <PrepSheetButton />
+              </>
+            }
+          />
           <GamePlan report={report} />
           <div ref={explorerRef} className="scroll-mt-6">
             <Explorer report={report} side={side} onSideChange={(s) => { setSide(s); setPath([]); }} path={path} onPathChange={setPath} />
           </div>
           <KeyLines report={report} onOpen={openLine} />
           <Repertoire report={report} onOpen={openLine} />
-          <Habits report={report} />
+          <HeadToHead report={report} onOpen={openLine} />
+          {report.habits ? <HabitsPanel report={report} /> : <Habits report={report} />}
+          {reportFilters && (
+            <DeepAnalysisPanel
+              key={`${report.username}|${reportFilters.limit}|${reportFilters.time_class}|${reportFilters.rated_only}`}
+              username={report.username}
+              filters={reportFilters}
+              onOpen={openLine}
+              onResult={setDeep}
+            />
+          )}
           {report.matchup && <Matchup report={report} />}
           <Methodology report={report} />
+          <PrepSheet report={report} deep={deep} />
         </>
       )}
     </div>
@@ -383,7 +438,7 @@ function Toggle({
 
 // ── profile ───────────────────────────────────────────────────────────────────
 
-function ProfileStrip({ report }: { report: ScoutingReport }) {
+function ProfileStrip({ report, actions }: { report: ScoutingReport; actions?: ReactNode }) {
   const p = report.profile;
   const ratings = Object.entries(p.ratings);
   const losses = p.terminations.loss.reduce((sum, row) => sum + row.games, 0);
@@ -402,6 +457,7 @@ function ProfileStrip({ report }: { report: ScoutingReport }) {
               ? ` · ${report.engine.evaluated_games} positions engine-checked`
               : " · engine check unavailable")}
         </span>
+        {actions && <div className="flex flex-wrap items-center gap-2 sm:ml-auto">{actions}</div>}
       </div>
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard

@@ -16,7 +16,10 @@ import type {
   PuzzleList,
   PuzzleProgress,
   PuzzleDifficultyFilter,
+  ScoutDeepStatus,
   ScoutTimeClass,
+  ScoutWatchFriend,
+  ScoutWatchList,
   ScoutingReport,
   PuzzlePhaseFilter,
   TimeClassFilter,
@@ -120,10 +123,58 @@ export async function fetchScoutingReport(
       rated_only: params.rated_only ?? false,
       engine: params.engine ?? false,
       me: params.me || undefined,
+      tz_offset: -new Date().getTimezoneOffset(),
     },
     // Fetching two archives plus an optional engine pass can take a while.
     timeout: 180000,
   });
+  return response.data;
+}
+
+export interface ScoutDeepParams {
+  limit?: number;
+  time_class?: ScoutTimeClass;
+  rated_only?: boolean;
+}
+
+function deepParams(params: ScoutDeepParams) {
+  return {
+    limit: params.limit ?? 300,
+    time_class: params.time_class || undefined,
+    rated_only: params.rated_only ?? false,
+  };
+}
+
+export async function startScoutDeep(username: string, params: ScoutDeepParams = {}): Promise<ScoutDeepStatus> {
+  const response = await api.post<ScoutDeepStatus>(`/scout/${encodeURIComponent(username)}/deep`, null, {
+    params: deepParams(params),
+  });
+  return response.data;
+}
+
+export async function fetchScoutDeep(username: string, params: ScoutDeepParams = {}): Promise<ScoutDeepStatus> {
+  const response = await api.get<ScoutDeepStatus>(`/scout/${encodeURIComponent(username)}/deep`, {
+    params: deepParams(params),
+  });
+  return response.data;
+}
+
+export async function fetchScoutWatchlist(): Promise<ScoutWatchList> {
+  const response = await api.get<ScoutWatchList>("/scout/watch", { timeout: 60000 });
+  return response.data;
+}
+
+export async function addScoutWatch(username: string): Promise<ScoutWatchFriend> {
+  const response = await api.post<ScoutWatchFriend>("/scout/watch", { username });
+  return response.data;
+}
+
+export async function removeScoutWatch(username: string): Promise<void> {
+  await api.delete(`/scout/watch/${encodeURIComponent(username)}`);
+}
+
+export async function markScoutWatchSeen(username: string): Promise<ScoutWatchFriend> {
+  const response = await api.post<ScoutWatchFriend>(`/scout/watch/${encodeURIComponent(username)}/seen`);
   return response.data;
 }
 

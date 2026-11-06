@@ -665,4 +665,258 @@ export interface ScoutingReport {
   engine: { enabled: boolean; available?: boolean; depth?: number; eval_ply?: number; evaluated_games?: number; error?: string };
   game_plan: { you_white: string[]; you_black: string[]; general: string[] };
   matchup: ScoutMatchup | null;
+  /** Added in scout v2 (contracts below). */
+  habits: ScoutHabits | null;
+  head_to_head: ScoutHeadToHead | null;
+}
+
+// ── Scout v2 contracts ───────────────────────────────────────────────────────
+// Shared between backend/services/scout_* modules and frontend/src/components/scout/*.
+// All scores/percentages are 0–100. All evals are centipawns from the SCOUTED
+// PLAYER'S point of view unless a field says otherwise (mate clipped to ±10000).
+
+/** Result split used by the habit sections. Same meaning as the ScoutStats fields. */
+export interface ScoutSplit {
+  key: string;
+  label: string;
+  games: number;
+  score_pct: number;
+  expected_pct: number | null;
+  perf_delta: number | null;
+  shrunk_delta: number;
+}
+
+/** report.habits: engine-free, computed in backend/services/scout_habits.py. */
+export interface ScoutHabits {
+  sessions: {
+    /** Games closer together than this (minutes) count as one session. */
+    session_gap_minutes: number;
+    sessions: number;
+    avg_games_per_session: number | null;
+    after_loss: ScoutSplit;
+    after_win: ScoutSplit;
+    after_draw: ScoutSplit;
+    /** Keys "1", "2", "3", "4-5", "6+" = game number within a session. */
+    by_session_index: ScoutSplit[];
+    /** Score when already on a losing streak of 2+ within the session. */
+    on_losing_streak: ScoutSplit;
+  };
+  /** Local time (shifted by the tz_offset the client sent). Keys: night 0-6, morning 6-12, afternoon 12-18, evening 18-24. */
+  time_of_day: ScoutSplit[];
+  /** Keys "mon".."sun", local time. */
+  weekday: ScoutSplit[];
+  /** Position-type comfort. Keys include: queenless, opposite_castling, same_side_castling, open_center,
+   *  closed_center, isolated_queen_pawn, bishop_pair_for, bishop_pair_against, rook_endgame,
+   *  minor_piece_endgame, pawn_endgame, queen_endgame. `share` = % of their games with that feature. */
+  positions: Array<ScoutSplit & { description: string; share: number }>;
+  resignation: {
+    resignations: number;
+    /** Resigned while material was level or better for them (piece values 1/3/3/5/9). */
+    resigned_not_behind: number;
+    resigned_not_behind_pct: number;
+    avg_material_at_resign: number | null;
+    /** Losses by checkmate/time while 5+ points of material down: they play on in lost positions. */
+    played_on_lost: number;
+    played_on_lost_pct: number;
+    /** Games they won or drew after being 3+ points down at some point. */
+    comebacks: number;
+    comeback_rate_pct: number;
+    /** Games they lost after being 3+ points up at some point. */
+    collapses_from_ahead: number;
+    collapse_rate_pct: number;
+  };
+  draws: {
+    draws: number;
+    draw_rate_pct: number;
+    by_reason: Array<{ reason: string; games: number; pct: number }>;
+    /** Agreed draws where they had the higher rating. */
+    agreed_as_favourite: number;
+  };
+  insights: string[];
+}
+
+/** report.head_to_head: games between the scouted player and `me`, taken from the scouted player's archive. */
+export interface ScoutHeadToHead {
+  me: string;
+  games: number;
+  /** All from YOUR point of view. */
+  wins: number;
+  draws: number;
+  losses: number;
+  score_pct: number;
+  your_avg_accuracy: number | null;
+  their_avg_accuracy: number | null;
+  you_white: ScoutSplit;
+  you_black: ScoutSplit;
+  /** Openings the two of you keep reaching (first ~8 plies), most frequent first. */
+  repeated_lines: Array<{ path: string[]; line: string; you_color: "white" | "black"; games: number; your_score_pct: number }>;
+  recent: Array<{
+    date: string | null;
+    url: string | null;
+    you_color: "white" | "black";
+    result: "win" | "draw" | "loss"; // yours
+    opening: string;
+    time_class: string | null;
+  }>;
+  insights: string[];
+}
+
+// ── Deep (engine) analysis: POST/GET /scout/{username}/deep ──────────────────
+
+export interface ScoutRefutation {
+  opponent_color: "white" | "black";
+  /** SAN path from the start to the position where THEY are to move. */
+  path: string[];
+  line: string;
+  fen: string;
+  node_games: number;
+  /** Their habitual move here and how often they play it. */
+  their_move: string;
+  their_move_games: number;
+  their_share: number;
+  their_score_pct: number;
+  /** Their POV: eval with best play vs after their habitual move. */
+  eval_best_cp: number;
+  eval_after_cp: number;
+  loss_cp: number;
+  severity: "inaccuracy" | "mistake" | "blunder";
+  /** What they should play instead. */
+  best_move: string;
+  /** Your best reply after their habitual move, and the engine line (SAN, starting with punish_move). */
+  punish_move: string;
+  punish_line: string[];
+  /** FEN after their habitual move (you to move). */
+  fen_after: string;
+}
+
+export type ScoutMotif =
+  | "hanging_piece"
+  | "missed_capture"
+  | "fork"
+  | "pin"
+  | "back_rank"
+  | "missed_mate"
+  | "allowed_mate"
+  | "king_safety"
+  | "other";
+
+export interface ScoutMistakeExample {
+  fen: string; // before their move
+  played: string;
+  best: string;
+  cp_loss: number;
+  move_number: number;
+  color: "white" | "black";
+  motif: ScoutMotif;
+  family: string;
+  url: string | null;
+  clock_pct: number | null; // % of base clock left when they moved
+}
+
+export interface ScoutFingerprint {
+  games_analyzed: number;
+  moves_analyzed: number;
+  depth: number;
+  avg_cp_loss: number | null;
+  accuracy_estimate: number | null;
+  phases: Array<{
+    phase: "opening" | "middlegame" | "endgame";
+    moves: number;
+    avg_cp_loss: number | null;
+    mistakes: number;
+    blunders: number;
+    /** Blunders per 100 moves. */
+    blunder_rate: number;
+  }>;
+  /** Per opening family: the move number where their play gets noticeably worse. */
+  opening_cliffs: Array<{
+    family: string;
+    color: "white" | "black";
+    games: number;
+    cliff_move: number | null;
+    avg_cp_loss_before: number | null;
+    avg_cp_loss_after: number | null;
+    by_move: Array<{ move: number; avg_cp_loss: number; samples: number }>;
+  }>;
+  motifs: Array<{ motif: ScoutMotif; label: string; count: number; pct: number; example: ScoutMistakeExample | null }>;
+  time_pressure: {
+    buckets: Array<{ key: string; label: string; moves: number; avg_cp_loss: number | null; blunder_rate: number }>;
+  };
+  conversion: {
+    /** Games where they reached >= +200 at some point: how often they won. */
+    winning_games: number;
+    converted: number;
+    converted_pct: number;
+    /** Games where they were <= -200 at some point: how often they avoided losing. */
+    losing_games: number;
+    saved: number;
+    saved_pct: number;
+  };
+  worst_mistakes: ScoutMistakeExample[];
+  insights: string[];
+}
+
+export interface ScoutTrappyLine {
+  opponent_color: "white" | "black";
+  /** Position (SAN path) where THEY are to move. */
+  path: string[];
+  line: string;
+  fen: string;
+  rating_band: string; // e.g. "1400-1600"
+  speeds: string[];
+  lichess_games: number;
+  /** A reply players at their rating often choose that scores badly for them. */
+  trap_move: string;
+  trap_share: number;
+  trap_score_pct: number; // for the side that plays trap_move
+  /** The reply that scores best for them at that rating. */
+  best_move: string | null;
+  best_score_pct: number | null;
+  /** How many of THEIR games reached this position, and what they played. */
+  their_games_here: number;
+  their_moves_here: Array<{ san: string; games: number }>;
+  reason: string;
+}
+
+export interface ScoutDeepResult {
+  refutations: ScoutRefutation[];
+  fingerprint: ScoutFingerprint | null;
+  /** null when the Lichess explorer was unavailable; see lichess_error. */
+  lichess_traps: ScoutTrappyLine[] | null;
+  lichess_error: string | null;
+  generated_at: string;
+}
+
+export interface ScoutDeepStatus {
+  state: "idle" | "running" | "done" | "error";
+  stage: "fetching" | "refutations" | "fingerprint" | "lichess" | "done" | null;
+  progress: { done: number; total: number };
+  started_at: string | null;
+  error: string | null;
+  result: ScoutDeepResult | null;
+}
+
+// ── Watchlist: /scout/watch (device-scoped) ──────────────────────────────────
+
+export interface ScoutWatchAlert {
+  kind: "new_games" | "new_opening" | "dropped_opening" | "rating_change";
+  color: "white" | "black" | null;
+  family: string | null;
+  games: number;
+  message: string;
+}
+
+export interface ScoutWatchFriend {
+  username: string;
+  added_at: string;
+  last_seen_at: string | null; // when the user last marked this friend as seen
+  last_game_at: string | null;
+  new_games: number; // games since last_seen_at
+  ratings: Record<string, number>;
+  alerts: ScoutWatchAlert[];
+  error: string | null; // e.g. Chess.com unreachable for this friend
+}
+
+export interface ScoutWatchList {
+  friends: ScoutWatchFriend[];
 }
